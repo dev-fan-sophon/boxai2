@@ -2,12 +2,54 @@
 set -euo pipefail
 
 echo 'Checking BoxAI orb toolchain...'
-for command_name in go bun curl jq ssh; do
+for command_name in bun curl jq ssh tar; do
   command -v "$command_name" >/dev/null || {
     echo "Required command not found: $command_name" >&2
     exit 1
   }
 done
+
+if ! command -v go >/dev/null; then
+  go_version=1.25.1
+  case "$(uname -m)" in
+    x86_64) go_arch=amd64 ;;
+    aarch64|arm64) go_arch=arm64 ;;
+    *) echo "Unsupported architecture for Go installation: $(uname -m)" >&2; exit 1 ;;
+  esac
+
+  go_archive="go${go_version}.linux-${go_arch}.tar.gz"
+  go_tmp=$(mktemp -d)
+  trap 'rm -rf "$go_tmp"' EXIT
+  echo "Installing Go ${go_version} for ${go_arch}..."
+  curl --fail --location --silent --show-error \
+    "https://go.dev/dl/${go_archive}" -o "$go_tmp/$go_archive"
+  curl --fail --location --silent --show-error \
+    "https://go.dev/dl/${go_archive}.sha256" -o "$go_tmp/$go_archive.sha256"
+  expected_sha=$(cat "$go_tmp/$go_archive.sha256")
+  if command -v sha256sum >/dev/null; then
+    printf '%s  %s\n' "$expected_sha" "$go_tmp/$go_archive" | sha256sum --check --status
+  elif command -v shasum >/dev/null; then
+    [[ $(shasum -a 256 "$go_tmp/$go_archive" | awk '{print $1}') == "$expected_sha" ]]
+  else
+    echo 'No SHA-256 verification command is available.' >&2
+    exit 1
+  fi
+
+  sudo_cmd=()
+  if [[ ! -w /usr/local ]]; then
+    command -v sudo >/dev/null || {
+      echo 'Go installation requires write access to /usr/local or sudo.' >&2
+      exit 1
+    }
+    sudo_cmd=(sudo)
+  fi
+  "${sudo_cmd[@]}" rm -rf /usr/local/go
+  "${sudo_cmd[@]}" tar -C /usr/local -xzf "$go_tmp/$go_archive"
+  "${sudo_cmd[@]}" ln -sf /usr/local/go/bin/go /usr/local/bin/go
+  hash -r
+fi
+
+go version
 
 echo 'Downloading Go modules...'
 go mod download
