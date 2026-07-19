@@ -39,7 +39,7 @@ For commercial licensing, please contact support@quantumnous.com
  * root by runtime branding, allowing a configured primary color to customize
  * this palette without a body-level declaration masking it.
  *
- * Light: airy cool-white work surfaces anchored by a deep-space navy sidebar.
+ * Light: airy cool-white work surfaces with matching light application chrome.
  * Dark: genuine navy foundations with electric blue, violet, and cyan accents.
  * User font and radius axes appear later and therefore remain authoritative.
  */
@@ -79,14 +79,14 @@ body[data-brand-token-preset='box-ai']:not([data-theme-preset]) {
   --overview-accent-1: var(--brand-primary, #2563eb);
   --overview-accent-2: #7c3aed;
   --overview-accent-3: #22d3ee;
-  --sidebar: #09152f;
-  --sidebar-foreground: #eaf1ff;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b1633;
   --sidebar-primary: var(--brand-primary, #2563eb);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #172b52;
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: #24385f;
-  --sidebar-ring: #60a5fa;
+  --sidebar-accent: #e8f0ff;
+  --sidebar-accent-foreground: #1d4ed8;
+  --sidebar-border: #dbe4f0;
+  --sidebar-ring: var(--brand-primary, #2563eb);
   --skeleton-base: #e7edf6;
   --skeleton-highlight: #f8fbff;
   --table-row: #ffffff;
