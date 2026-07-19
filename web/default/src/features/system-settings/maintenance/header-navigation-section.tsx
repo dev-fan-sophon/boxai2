@@ -166,12 +166,16 @@ export function HeaderNavigationSection({
     {
       key: 'docs',
       title: t('Docs'),
-      description: t('Documentation or external knowledge base.'),
+      description: t(
+        'Shows API Docs in the public header. Uses the external docs URL from Site settings when set; otherwise falls back to the About page content.'
+      ),
     },
     {
       key: 'about',
       title: t('About'),
-      description: t('Static page describing the platform.'),
+      description: t(
+        'Static About page. Independent of Docs; enable to show About in the public header strip (off by default).'
+      ),
     },
   ]
 

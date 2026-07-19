@@ -21,15 +21,18 @@ import { Link } from '@tanstack/react-router'
 import {
   ArrowRight,
   BookOpen,
+  CalendarCheck,
   Check,
   ChevronDown,
   ChevronUp,
   Circle,
   Copy,
   CreditCard,
+  ExternalLink,
   FileText,
   KeyRound,
   ListChecks,
+  MessageSquare,
   RadioTower,
   ShieldCheck,
   TerminalSquare,
@@ -47,9 +50,17 @@ import {
 } from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
+import { fetchActiveChatKey } from '@/features/chat/hooks/use-active-chat-key'
+import { useChatPresets } from '@/features/chat/hooks/use-chat-presets'
+import {
+  chatLinkRequiresApiKey,
+  resolveChatUrl,
+  type ChatPreset,
+} from '@/features/chat/lib/chat-links'
 import { fetchTokenKey, getApiKeys } from '@/features/keys/api'
 import type { ApiKey } from '@/features/keys/types'
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
+import { useStatus } from '@/hooks/use-status'
 import { getUserModels } from '@/lib/api'
 import { MOTION_TRANSITION } from '@/lib/motion'
 import { ROLE } from '@/lib/roles'
@@ -88,6 +99,7 @@ type DashboardActionPath =
   | '/channels'
   | '/usage-logs'
   | '/pricing'
+  | '/profile'
 
 interface StartStep {
   title: string
@@ -455,9 +467,85 @@ function CompactQuickAction(props: { action: QuickAction }) {
   )
 }
 
+function ChatPresetChip(props: {
+  preset: ChatPreset
+  serverAddress: string
+}) {
+  const { t } = useTranslation()
+  const [loading, setLoading] = useState(false)
+
+  if (props.preset.type === 'web') {
+    return (
+      <Button
+        variant='outline'
+        size='sm'
+        className='h-8 max-w-full gap-1.5 px-2.5'
+        render={
+          <Link to='/chat/$chatId' params={{ chatId: props.preset.id }} />
+        }
+      >
+        <MessageSquare data-icon='inline-start' />
+        <span className='truncate'>{props.preset.name}</span>
+      </Button>
+    )
+  }
+
+  const handleOpen = async () => {
+    if (loading) return
+    setLoading(true)
+    try {
+      let apiKey: string | undefined
+      if (chatLinkRequiresApiKey(props.preset.url)) {
+        apiKey = await fetchActiveChatKey()
+      }
+      const resolved = resolveChatUrl({
+        template: props.preset.url,
+        apiKey,
+        serverAddress: props.serverAddress,
+      })
+      if (!resolved) {
+        toast.error(
+          t(
+            'Unable to prepare chat link. Please ensure you have an enabled API key.'
+          )
+        )
+        return
+      }
+      window.open(resolved, '_blank', 'noopener,noreferrer')
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : t(
+              'Unable to prepare chat link. Please ensure you have an enabled API key.'
+            )
+      toast.error(message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Button
+      variant='outline'
+      size='sm'
+      className='h-8 max-w-full gap-1.5 px-2.5'
+      disabled={loading}
+      onClick={() => {
+        void handleOpen()
+      }}
+    >
+      <ExternalLink data-icon='inline-start' />
+      <span className='truncate'>{props.preset.name}</span>
+    </Button>
+  )
+}
+
 export function OverviewDashboard() {
   const { t } = useTranslation()
   const user = useAuthStore((state) => state.auth.user)
+  const { status } = useStatus()
+  const { chatPresets, serverAddress } = useChatPresets()
   const { items: apiInfoItems } = useApiInfo()
   const {
     apiInfo: showApiInfoPanel,
@@ -473,6 +561,12 @@ export function OverviewDashboard() {
   const remainQuota = Number(user?.quota ?? 0)
   const usedQuota = Number(user?.used_quota ?? 0)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
+  const checkinEnabled = status?.checkin_enabled === true
+  const visibleChatPresets = useMemo(
+    () => chatPresets.filter((preset) => preset.type !== 'fluent'),
+    [chatPresets]
+  )
+  const showChatApps = visibleChatPresets.length > 0
 
   const apiKeysQuery = useQuery({
     queryKey: ['dashboard', 'overview', 'api-keys'],
@@ -524,8 +618,8 @@ export function OverviewDashboard() {
     [preferredKey, remainQuota, requestCount, t, usedQuota]
   )
 
-  const quickActions = useMemo<QuickAction[]>(
-    () => [
+  const quickActions = useMemo<QuickAction[]>(() => {
+    const actions: QuickAction[] = [
       {
         title: t('API Keys'),
         description: t('Create a key for your app or service'),
@@ -546,14 +640,24 @@ export function OverviewDashboard() {
         icon: FileText,
       },
       {
-        title: t('Pricing'),
+        title: t('Model Hub'),
         description: t('Review model rates before scaling traffic'),
         to: '/pricing',
         icon: BookOpen,
       },
-    ],
-    [t]
-  )
+    ]
+
+    if (checkinEnabled) {
+      actions.splice(1, 0, {
+        title: t('Daily Check-in'),
+        description: t('Check in daily to receive random quota rewards'),
+        to: '/profile',
+        icon: CalendarCheck,
+      })
+    }
+
+    return actions
+  }, [checkinEnabled, t])
 
   const visibleQuickActions = useMemo(
     () => quickActions.filter((action) => !action.adminOnly || isAdmin),
@@ -746,6 +850,63 @@ export function OverviewDashboard() {
               </div>
             </div>
           </CardStaggerItem>
+        </CardStaggerContainer>
+      )}
+
+      {(checkinEnabled || showChatApps) && (
+        <CardStaggerContainer className='grid gap-3 sm:grid-cols-2'>
+          {checkinEnabled && (
+            <CardStaggerItem>
+              <div className='bg-card flex h-full items-center justify-between gap-3 rounded-2xl border p-4 shadow-xs'>
+                <div className='flex min-w-0 items-center gap-3'>
+                  <span className='bg-muted flex size-10 shrink-0 items-center justify-center rounded-xl'>
+                    <CalendarCheck className='size-4' aria-hidden='true' />
+                  </span>
+                  <div className='min-w-0'>
+                    <div className='truncate text-sm font-semibold'>
+                      {t('Daily Check-in')}
+                    </div>
+                    <p className='text-muted-foreground line-clamp-2 text-xs'>
+                      {t('Check in daily to receive random quota rewards')}
+                    </p>
+                  </div>
+                </div>
+                <Button size='sm' render={<Link to='/profile' />}>
+                  {t('Check in now')}
+                </Button>
+              </div>
+            </CardStaggerItem>
+          )}
+          {showChatApps && (
+            <CardStaggerItem
+              className={cn(!checkinEnabled && 'sm:col-span-2')}
+            >
+              <div className='bg-card flex h-full flex-col gap-3 rounded-2xl border p-4 shadow-xs'>
+                <div className='flex items-center gap-3'>
+                  <span className='bg-muted flex size-10 shrink-0 items-center justify-center rounded-xl'>
+                    <MessageSquare className='size-4' aria-hidden='true' />
+                  </span>
+                  <div className='min-w-0'>
+                    <div className='truncate text-sm font-semibold'>
+                      {t('Chat apps')}
+                    </div>
+                    <p className='text-muted-foreground line-clamp-2 text-xs'>
+                      {t('Open configured chat clients with your API key')}
+                    </p>
+                  </div>
+                </div>
+                <div className='flex flex-wrap gap-2'>
+                  {visibleChatPresets.slice(0, 6).map((preset) => (
+                    <ChatPresetChip
+                      key={preset.id}
+                      preset={preset}
+                      serverAddress={serverAddress}
+                    />
+                  ))}
+                </div>
+              </div>
+            </CardStaggerItem>
+          )}
         </CardStaggerContainer>
       )}
 

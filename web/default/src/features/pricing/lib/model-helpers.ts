@@ -95,6 +95,78 @@ export function getDisplayGroupRatio(
 }
 
 /**
+ * Group models by vendor for Apilio-style Model Hub card sections.
+ * Unknown vendors collapse into a single "Other" bucket at the end.
+ */
+export type VendorModelGroup = {
+  key: string
+  name: string
+  icon?: string
+  models: PricingModel[]
+}
+
+export function groupModelsByVendor(
+  models: PricingModel[],
+  otherLabel = 'Other'
+): VendorModelGroup[] {
+  const groups = new Map<string, VendorModelGroup>()
+  const order: string[] = []
+
+  for (const model of models) {
+    const name = model.vendor_name?.trim() || otherLabel
+    const key = model.vendor_name?.trim()
+      ? `vendor:${name}`
+      : `other:${otherLabel}`
+    const existing = groups.get(key)
+    if (existing) {
+      existing.models.push(model)
+      if (!existing.icon && model.vendor_icon) {
+        existing.icon = model.vendor_icon
+      }
+      continue
+    }
+    groups.set(key, {
+      key,
+      name,
+      icon: model.vendor_icon,
+      models: [model],
+    })
+    order.push(key)
+  }
+
+  // Keep named vendors first; push the Other bucket to the end.
+  const otherKeys = order.filter((k) => k.startsWith('other:'))
+  const namedKeys = order.filter((k) => !k.startsWith('other:'))
+  return [...namedKeys, ...otherKeys]
+    .map((key) => groups.get(key))
+    .filter((group): group is VendorModelGroup => Boolean(group))
+}
+
+/**
+ * Group-ratio discount for a *selected* billing group only.
+ *
+ * Only returns a percent when a concrete group filter is active, the model
+ * lists that group in `enable_groups`, and that group's configured ratio is
+ * in (0, 1). Does not fall back to min-of-all-groups or “vs official MSRP”.
+ */
+export function getGroupSavingsPercent(
+  model: PricingModel,
+  selectedGroup?: string
+): number | null {
+  if (!selectedGroup || selectedGroup === FILTER_ALL) return null
+  const enableGroups = Array.isArray(model.enable_groups)
+    ? model.enable_groups
+    : []
+  if (!enableGroups.includes(selectedGroup)) return null
+  // Use the configured ratio for this group only (no min-across-groups fallback).
+  const ratio = getConfiguredGroupRatio(model.group_ratio || {}, selectedGroup)
+  if (!(ratio > 0) || !(ratio < 1)) return null
+  const percent = Math.round((1 - ratio) * 100)
+  if (percent < 1) return null
+  return Math.min(percent, 99)
+}
+
+/**
  * Replace model placeholder in endpoint path
  */
 export function replaceModelInPath(path: string, modelName: string): string {

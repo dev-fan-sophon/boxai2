@@ -44,6 +44,9 @@ export function RankingsHero(props: RankingsHeroProps) {
   return (
     <section className='space-y-5'>
       <div className='space-y-2'>
+        <p className='text-muted-foreground mb-2 text-xs font-medium tracking-[0.16em] uppercase'>
+          {t('Live Insights')}
+        </p>
         <h1 className='text-[clamp(1.75rem,4vw,2.5rem)] leading-[1.15] font-bold tracking-tight'>
           {t('Rankings')}
         </h1>

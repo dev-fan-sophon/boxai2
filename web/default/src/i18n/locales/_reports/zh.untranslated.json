@@ -1,0 +1,8 @@
+{
+  "Chat apps": "Chat apps",
+  "Group {{percent}}% off": "Group {{percent}}% off",
+  "Open configured chat clients with your API key": "Open configured chat clients with your API key",
+  "Save {{percent}}%": "Save {{percent}}%",
+  "Shows API Docs in the public header. Uses the external docs URL from Site settings when set; otherwise falls back to the About page content.": "Shows API Docs in the public header. Uses the external docs URL from Site settings when set; otherwise falls back to the About page content.",
+  "Static About page. Independent of Docs; enable to show About in the public header strip (off by default).": "Static About page. Independent of Docs; enable to show About in the public header strip (off by default)."
+}

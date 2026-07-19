@@ -32,13 +32,16 @@ export type HeaderNavModules = {
   [key: string]: boolean | ModuleAccess
 }
 
+// Apilio-style public strip defaults:
+// Home · Model Hub · Rankings · API Docs (+ Dashboard CTA via console flag).
+// About is intentionally off by default — keep it in admin/footer paths only.
 const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   home: true,
   console: true,
   pricing: { enabled: true, requireAuth: false },
   rankings: { enabled: true, requireAuth: false },
   docs: true,
-  about: true,
+  about: false,
 }
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {

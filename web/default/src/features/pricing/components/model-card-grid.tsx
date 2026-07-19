@@ -18,13 +18,15 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
 import { getPerfMetricsSummary } from '@/features/performance-metrics/api'
+import { getLobeIcon } from '@/lib/lobe-icon'
 
 import { DEFAULT_PRICING_PAGE_SIZE, DEFAULT_TOKEN_UNIT } from '../constants'
+import { groupModelsByVendor } from '../lib/model-helpers'
 import type { PricingModel, TokenUnit } from '../types'
 import { ModelCard } from './model-card'
 import type { ModelPerfBadgeData } from './model-perf-badge'
@@ -39,6 +41,23 @@ export interface ModelCardGridProps {
   selectedGroup?: string
 }
 
+/** Content signature so page resets on real list changes, not only identity. */
+function modelsListSignature(models: PricingModel[]): string {
+  if (models.length === 0) return '0'
+  const first = models[0]
+  const last = models[models.length - 1]
+  const mid = models[Math.floor(models.length / 2)]
+  return [
+    models.length,
+    first?.id ?? '',
+    first?.model_name ?? '',
+    mid?.id ?? '',
+    mid?.model_name ?? '',
+    last?.id ?? '',
+    last?.model_name ?? '',
+  ].join('|')
+}
+
 export function ModelCardGrid(props: ModelCardGridProps) {
   const { t } = useTranslation()
   const [page, setPage] = useState(1)
@@ -46,6 +65,15 @@ export function ModelCardGrid(props: ModelCardGridProps) {
   const tokenUnit = props.tokenUnit ?? DEFAULT_TOKEN_UNIT
   const totalPages = Math.max(1, Math.ceil(props.models.length / pageSize))
   const currentPage = Math.min(page, totalPages)
+
+  const listSignature = useMemo(
+    () => modelsListSignature(props.models),
+    [props.models]
+  )
+
+  useEffect(() => {
+    setPage(1)
+  }, [listSignature])
 
   const perfQuery = useQuery({
     queryKey: ['perf-metrics-summary', 24],
@@ -58,6 +86,20 @@ export function ModelCardGrid(props: ModelCardGridProps) {
     const start = (currentPage - 1) * pageSize
     return props.models.slice(start, start + pageSize)
   }, [currentPage, pageSize, props.models])
+
+  const vendorTotalCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const model of props.models) {
+      const key = model.vendor_name?.trim() || '__other__'
+      counts.set(key, (counts.get(key) || 0) + 1)
+    }
+    return counts
+  }, [props.models])
+
+  const vendorGroups = useMemo(
+    () => groupModelsByVendor(pagedModels, t('Other')),
+    [pagedModels, t]
+  )
 
   const perfMap = useMemo(() => {
     const map = new Map<string, ModelPerfBadgeData>()
@@ -72,22 +114,62 @@ export function ModelCardGrid(props: ModelCardGridProps) {
   }
 
   return (
-    <div className='space-y-4 sm:space-y-5'>
-      <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3'>
-        {pagedModels.map((model) => (
-          <ModelCard
-            key={model.id ?? model.model_name}
-            model={model}
-            tokenUnit={tokenUnit}
-            priceRate={props.priceRate}
-            usdExchangeRate={props.usdExchangeRate}
-            showRechargePrice={props.showRechargePrice}
-            selectedGroup={props.selectedGroup}
-            perf={perfMap.get(model.model_name || '')}
-            onClick={() => props.onModelClick(model.model_name || '')}
-          />
-        ))}
-      </div>
+    <div className='space-y-6 sm:space-y-8'>
+      {vendorGroups.map((group) => {
+        const countKey = group.key.startsWith('other:')
+          ? '__other__'
+          : group.name
+        const totalForVendor =
+          vendorTotalCounts.get(countKey) ?? group.models.length
+        const shownForVendor = group.models.length
+        const vendorIcon = group.icon ? getLobeIcon(group.icon, 20) : null
+        const initial = group.name.charAt(0).toUpperCase() || '?'
+        const countLabel =
+          shownForVendor < totalForVendor
+            ? t('{{shown}} of {{total}} models', {
+                shown: shownForVendor,
+                total: totalForVendor,
+              })
+            : t('{{count}} models', { count: totalForVendor })
+
+        return (
+          <section key={group.key} className='space-y-3 sm:space-y-4'>
+            <header className='flex items-center justify-between gap-3 border-b pb-2.5'>
+              <div className='flex min-w-0 items-center gap-2.5'>
+                <div className='bg-muted/50 flex size-8 shrink-0 items-center justify-center rounded-lg'>
+                  {vendorIcon || (
+                    <span className='text-muted-foreground text-xs font-bold'>
+                      {initial}
+                    </span>
+                  )}
+                </div>
+                <div className='min-w-0'>
+                  <h2 className='truncate text-sm font-semibold tracking-tight sm:text-base'>
+                    {group.name}
+                  </h2>
+                  <p className='text-muted-foreground text-xs'>{countLabel}</p>
+                </div>
+              </div>
+            </header>
+
+            <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3'>
+              {group.models.map((model) => (
+                <ModelCard
+                  key={model.id ?? model.model_name}
+                  model={model}
+                  tokenUnit={tokenUnit}
+                  priceRate={props.priceRate}
+                  usdExchangeRate={props.usdExchangeRate}
+                  showRechargePrice={props.showRechargePrice}
+                  selectedGroup={props.selectedGroup}
+                  perf={perfMap.get(model.model_name || '')}
+                  onClick={() => props.onModelClick(model.model_name || '')}
+                />
+              ))}
+            </div>
+          </section>
+        )
+      })}
 
       {totalPages > 1 && (
         <div className='text-muted-foreground flex flex-col items-center justify-between gap-3 border-t px-4 py-3 text-sm sm:flex-row'>

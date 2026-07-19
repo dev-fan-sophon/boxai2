@@ -38,6 +38,8 @@ export type SidebarSectionConfig = {
 
 export type SidebarModulesAdminConfig = Record<string, SidebarSectionConfig>
 
+// Mirrors frontend defaults in lib/nav-modules.ts (Apilio-style public strip).
+// About is off by default; admins can re-enable for a dedicated about page.
 export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
   home: true,
   console: true,
@@ -50,7 +52,7 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
     requireAuth: false,
   },
   docs: true,
-  about: true,
+  about: false,
 }
 
 export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {

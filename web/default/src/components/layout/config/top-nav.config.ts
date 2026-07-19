@@ -19,12 +19,14 @@ For commercial licensing, please contact support@quantumnous.com
 import { type TopNavLink } from '../types'
 
 /**
- * Default top navigation links
+ * Default top navigation links (Apilio-style marketing strip)
  *
- * In practice, navigation links are dynamically fetched from backend.
- * Priority: Backend dynamic links > Provided navLinks > defaultTopNavLinks
- *
- * This is intentionally empty to encourage backend configuration.
- * If you need fallback links, add them here.
+ * Priority: Backend HeaderNavModules (via useTopNavLinks) > provided navLinks >
+ * these defaults. Keep titles as English i18n source keys.
  */
-export const defaultTopNavLinks: TopNavLink[] = []
+export const defaultTopNavLinks: TopNavLink[] = [
+  { title: 'Home', href: '/' },
+  { title: 'Model Hub', href: '/pricing' },
+  { title: 'Rankings', href: '/rankings' },
+  { title: 'API Docs', href: '/about' },
+]

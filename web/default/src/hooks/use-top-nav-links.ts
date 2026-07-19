@@ -40,8 +40,12 @@ export type TopNavLink = {
  *   pricing: { enabled: true, requireAuth: false },
  *   rankings: { enabled: true, requireAuth: false },
  *   docs: true,
- *   about: true
+ *   about: false
  * }
+ *
+ * Default strip (Apilio-style): Home · Model Hub · Rankings · API Docs.
+ * About is off by default but appears when admin enables HeaderNavModules.about.
+ * Console/Dashboard is a CTA in PublicHeader, not a strip text link.
  */
 export function useTopNavLinks(): TopNavLink[] {
   const { t } = useTranslation()
@@ -62,41 +66,40 @@ export function useTopNavLinks(): TopNavLink[] {
 
   const links: TopNavLink[] = []
 
-  // Home
+  // Marketing strip order: Home · Model Hub · Rankings · API Docs · (About if enabled)
+  // Dashboard is rendered as a primary CTA button in PublicHeader, not here.
+
   if (modules?.home !== false) {
     links.push({ title: t('Home'), href: '/' })
   }
 
-  // Console -> /dashboard (new console path)
-  if (modules?.console !== false) {
-    links.push({ title: t('Console'), href: '/dashboard' })
-  }
-
-  // Pricing
   const pricing = modules?.pricing
   if (pricing && typeof pricing === 'object' && pricing.enabled) {
     const requiresAuth = pricing.requireAuth && !isAuthed
-    links.push({ title: t('Model Square'), href: '/pricing', requiresAuth })
+    links.push({ title: t('Model Hub'), href: '/pricing', requiresAuth })
   }
 
-  // Rankings
   const rankings = modules?.rankings
   if (rankings && typeof rankings === 'object' && rankings.enabled) {
     const requiresAuth = rankings.requireAuth && !isAuthed
     links.push({ title: t('Rankings'), href: '/rankings', requiresAuth })
   }
 
-  // Docs (supports external links)
+  // Track when Docs already occupies /about so About is not duplicated.
+  let docsFallsBackToAbout = false
   if (modules?.docs !== false) {
     if (docsLink) {
-      links.push({ title: t('Docs'), href: docsLink, external: true })
+      links.push({ title: t('API Docs'), href: docsLink, external: true })
     } else {
-      links.push({ title: t('Docs'), href: '/docs' })
+      // No external docs_link — built-in About page hosts docs-style content.
+      docsFallsBackToAbout = true
+      links.push({ title: t('API Docs'), href: '/about' })
     }
   }
 
-  // About
-  if (modules?.about !== false) {
+  // Explicit opt-in (default false). Skip when Docs already links to /about
+  // so the strip does not show two labels for the same destination.
+  if (modules?.about && !docsFallsBackToAbout) {
     links.push({ title: t('About'), href: '/about' })
   }
 

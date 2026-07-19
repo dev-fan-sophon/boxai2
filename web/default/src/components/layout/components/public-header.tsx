@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
+import { LayoutDashboard } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -28,8 +29,10 @@ import { ThemeSwitch } from '@/components/theme-switch'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useNotifications } from '@/hooks/use-notifications'
+import { useStatus } from '@/hooks/use-status'
 import { useSystemConfig } from '@/hooks/use-system-config'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
+import { parseHeaderNavModulesFromStatus } from '@/lib/nav-modules'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth-store'
 
@@ -82,6 +85,7 @@ export function PublicHeader(props: PublicHeaderProps) {
   const [authPromptSecondsLeft, setAuthPromptSecondsLeft] =
     useState(AUTH_PROMPT_SECONDS)
   const { auth } = useAuthStore()
+  const { status } = useStatus()
   const {
     systemName,
     logo: systemLogo,
@@ -97,6 +101,11 @@ export function PublicHeader(props: PublicHeaderProps) {
   const isAuthenticated = !!user
   const displaySiteName = customSiteName || systemName
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
+  // Dashboard stays a CTA button (Apilio-style), not a primary strip link.
+  // Still respect HeaderNavModules.console so admins can hide it.
+  const showDashboardCta =
+    parseHeaderNavModulesFromStatus(status as Record<string, unknown> | null)
+      .console !== false
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -141,6 +150,20 @@ export function PublicHeader(props: PublicHeaderProps) {
     setAuthPromptTarget(null)
     navigate({ to: '/sign-in', search: { redirect } })
   }, [authPromptTarget?.href, navigate])
+
+  const openDashboardAuthPrompt = useCallback(
+    (closeMobile = false) => {
+      if (closeMobile) {
+        setMobileOpen(false)
+      }
+      setAuthPromptSecondsLeft(AUTH_PROMPT_SECONDS)
+      setAuthPromptTarget({
+        title: t('Dashboard'),
+        href: '/dashboard',
+      })
+    },
+    [t]
+  )
 
   const handleNavLinkClick = useCallback(
     (
@@ -282,16 +305,41 @@ export function PublicHeader(props: PublicHeaderProps) {
                   <div className='bg-border/40 mx-1 h-4 w-px' />
                   {loading ? (
                     <Skeleton className='h-8 w-20 rounded-lg' />
-                  ) : isAuthenticated ? (
-                    <ProfileDropdown />
                   ) : (
-                    <Button
-                      size='sm'
-                      className='h-8 rounded-lg px-3.5 text-xs font-medium'
-                      render={<Link to='/sign-in' />}
-                    >
-                      {t('Sign in')}
-                    </Button>
+                    <>
+                      {showDashboardCta &&
+                        (isAuthenticated ? (
+                          <Button
+                            size='sm'
+                            className='h-8 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 text-xs font-medium text-white shadow-sm hover:from-blue-500 hover:to-violet-500'
+                            render={<Link to='/dashboard' />}
+                          >
+                            <LayoutDashboard className='mr-1 size-3.5' />
+                            {t('Dashboard')}
+                          </Button>
+                        ) : (
+                          <Button
+                            size='sm'
+                            className='h-8 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 text-xs font-medium text-white shadow-sm hover:from-blue-500 hover:to-violet-500'
+                            onClick={() => openDashboardAuthPrompt()}
+                          >
+                            <LayoutDashboard className='mr-1 size-3.5' />
+                            {t('Dashboard')}
+                          </Button>
+                        ))}
+                      {isAuthenticated ? (
+                        <ProfileDropdown />
+                      ) : (
+                        <Button
+                          size='sm'
+                          variant='outline'
+                          className='h-8 rounded-full px-3.5 text-xs font-medium'
+                          render={<Link to='/sign-in' />}
+                        >
+                          {t('Sign in')}
+                        </Button>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -403,13 +451,35 @@ export function PublicHeader(props: PublicHeaderProps) {
             style={{ transitionDelay: mobileOpen ? '250ms' : '0ms' }}
           >
             {showAuthButtons && (
-              <Link
-                to={isAuthenticated ? '/dashboard' : '/sign-in'}
-                onClick={() => setMobileOpen(false)}
-                className='bg-foreground text-background inline-flex h-10 items-center justify-center rounded-lg text-sm font-medium transition-opacity hover:opacity-90 active:opacity-80'
-              >
-                {isAuthenticated ? t('Go to Dashboard') : t('Sign in')}
-              </Link>
+              <div className='flex flex-col gap-2'>
+                {showDashboardCta &&
+                  (isAuthenticated ? (
+                    <Link
+                      to='/dashboard'
+                      onClick={() => setMobileOpen(false)}
+                      className='inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 text-sm font-medium text-white transition-opacity hover:opacity-90'
+                    >
+                      {t('Dashboard')}
+                    </Link>
+                  ) : (
+                    <button
+                      type='button'
+                      onClick={() => openDashboardAuthPrompt(true)}
+                      className='inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 text-sm font-medium text-white transition-opacity hover:opacity-90'
+                    >
+                      {t('Dashboard')}
+                    </button>
+                  ))}
+                {!isAuthenticated && (
+                  <Link
+                    to='/sign-in'
+                    onClick={() => setMobileOpen(false)}
+                    className='border-border bg-background text-foreground inline-flex h-10 items-center justify-center rounded-full border text-sm font-medium transition-opacity hover:opacity-90'
+                  >
+                    {t('Sign in')}
+                  </Link>
+                )}
+              </div>
             )}
           </div>
         </div>

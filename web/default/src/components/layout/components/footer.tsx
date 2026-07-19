@@ -264,8 +264,10 @@ export function Footer(props: FooterProps) {
                 {displayName}
               </span>
             </Link>
-            <p className='text-muted-foreground/60 mt-3 max-w-[200px] text-xs leading-relaxed'>
-              {t('Powerful API Management Platform')}
+            <p className='text-muted-foreground/60 mt-3 max-w-[240px] text-xs leading-relaxed'>
+              {t(
+                'Unified API gateway for multi-model AI access — built for developers and teams.'
+              )}
             </p>
           </div>
 
