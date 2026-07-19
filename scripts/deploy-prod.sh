@@ -181,10 +181,10 @@ for p in entries:
 print("KEEP_RELEASES", sorted(keep))
 PY
 # Drop obsolete app images (keep postgres/redis)
-docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^boxai2-local:|^ghcr.io/fran0220/boxai:' | while read -r img; do
+while read -r img; do
   echo "removing image $img"
   docker rmi -f "$img" 2>/dev/null || true
-done
+done < <(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E '^boxai2-local:|^ghcr.io/fran0220/boxai:' || true)
 docker image prune -f >/dev/null 2>&1 || true
 # Health
 for i in $(seq 1 30); do
