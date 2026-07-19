@@ -25,7 +25,16 @@ export function Header({ className, children, ...props }: HeaderProps) {
   return (
     <header
       className={cn(
-        'sticky top-0 z-40 h-[var(--app-header-height,3rem)] w-full shrink-0 bg-transparent',
+        // Brand chrome is navy in both light and dark — use sidebar tokens,
+        // not page surface tokens (text-foreground / muted), for all ink.
+        'bg-sidebar text-sidebar-foreground sticky top-0 z-40 h-[var(--app-header-height,3rem)] w-full shrink-0',
+        // Ghost / icon controls (language, config, profile, sidebar trigger)
+        // ship with light-surface hover styles; remap them onto the navy bar.
+        '[&_[data-slot=button]]:text-sidebar-foreground',
+        '[&_[data-slot=button]]:hover:bg-sidebar-accent [&_[data-slot=button]]:hover:text-sidebar-accent-foreground',
+        '[&_[data-slot=button]]:aria-expanded:bg-sidebar-accent [&_[data-slot=button]]:aria-expanded:text-sidebar-accent-foreground',
+        '[&_[data-slot=sidebar-trigger]]:text-sidebar-foreground',
+        '[&_[data-slot=sidebar-trigger]]:hover:bg-sidebar-accent [&_[data-slot=sidebar-trigger]]:hover:text-sidebar-accent-foreground',
         className
       )}
       {...props}

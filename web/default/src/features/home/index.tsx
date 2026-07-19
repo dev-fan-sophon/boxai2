@@ -49,7 +49,7 @@ export function Home() {
   // Logged-in users land in the console (Apilio-style entry), not marketing home.
   useEffect(() => {
     if (isAuthenticated) {
-      navigate({ to: '/dashboard/overview', replace: true })
+      navigate({ to: '/dashboard', replace: true })
     }
   }, [isAuthenticated, navigate])
 

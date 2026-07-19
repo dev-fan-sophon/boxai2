@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-import { type TopNavLink } from '../types'
+import type { TopNavLink } from '../types'
 
 type TopNavProps = React.HTMLAttributes<HTMLElement> & {
   links: TopNavLink[]
@@ -58,7 +58,13 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
       <div className='lg:hidden'>
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger
-            render={<Button size='icon' variant='outline' className='size-7' />}
+            render={
+              <Button
+                size='icon'
+                variant='ghost'
+                className='text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground size-7'
+              />
+            }
           >
             <Menu />
           </DropdownMenuTrigger>
@@ -87,7 +93,7 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
                       </Link>
                     )
                   }
-                ></DropdownMenuItem>
+                />
               )
             )}
           </DropdownMenuContent>
@@ -109,7 +115,7 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
               href={href}
               target='_blank'
               rel='noopener noreferrer'
-              className={`hover:text-primary text-sm font-medium transition-colors ${isActive ? '' : 'text-muted-foreground'}`}
+              className={`hover:text-sidebar-foreground text-sm font-medium transition-colors ${isActive ? 'text-sidebar-foreground' : 'text-sidebar-foreground/70'}`}
             >
               {title}
             </a>
@@ -118,7 +124,7 @@ export function TopNav({ className, links, ...props }: TopNavProps) {
               key={`${title}-${href}`}
               to={href}
               disabled={disabled}
-              className={`hover:text-primary text-sm font-medium transition-colors ${isActive ? '' : 'text-muted-foreground'}`}
+              className={`hover:text-sidebar-foreground text-sm font-medium transition-colors ${isActive ? 'text-sidebar-foreground' : 'text-sidebar-foreground/70'}`}
             >
               {title}
             </Link>
