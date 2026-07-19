@@ -73,6 +73,33 @@ var vendorDisplayNames = map[string]string{
 	"zhipuai":          "Zhipu AI",
 }
 
+var vendorIconKeys = map[string]string{
+	"alibaba":          "Alibaba",
+	"anthropic":        "Anthropic",
+	"cohere":           "Cohere",
+	"deepreinforce":    "ModelProvider",
+	"deepseek":         "DeepSeek",
+	"google":           "Google",
+	"meituan":          "LongCat",
+	"meta":             "Meta",
+	"microsoft":        "Microsoft",
+	"minimax":          "Minimax",
+	"mistral":          "Mistral",
+	"moonshotai":       "Moonshot",
+	"nvidia":           "Nvidia",
+	"openai":           "OpenAI",
+	"perplexity":       "Perplexity",
+	"poolside":         "ModelProvider",
+	"sakana":           "ModelProvider",
+	"sarvam":           "ModelProvider",
+	"stepfun":          "Stepfun",
+	"tencent":          "Tencent",
+	"thinkingmachines": "ModelProvider",
+	"xai":              "XAI",
+	"xiaomi":           "XiaomiMiMo",
+	"zhipuai":          "Zhipu",
+}
+
 var (
 	etagCache  = make(map[string]string)
 	bodyCache  = make(map[string][]byte)
@@ -240,6 +267,7 @@ func parseModelsDevCatalog(catalog map[string]modelsDevCatalogEntry) ([]upstream
 		vendor := upstreamVendor{
 			Name:        vendorName,
 			Description: vendorName + " model provider",
+			Icon:        vendorIconKeys[namespace],
 			Status:      1,
 		}
 		vendorsByName[vendorName] = vendor
@@ -314,6 +342,10 @@ func ensureVendorID(vendorName string, vendorByName map[string]upstreamVendor, v
 	}
 	var existing model.Vendor
 	if err := model.DB.Where("name = ?", vendorName).First(&existing).Error; err == nil {
+		upstream := vendorByName[vendorName]
+		if existing.Icon == "" && upstream.Icon != "" {
+			_ = model.DB.Model(&existing).Update("icon", upstream.Icon).Error
+		}
 		vendorIDCache[vendorName] = existing.Id
 		return existing.Id
 	}

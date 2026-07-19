@@ -37,7 +37,22 @@ func TestParseModelsDevCatalog(t *testing.T) {
 
 	require.Len(t, vendors, 2)
 	assert.Equal(t, "Moonshot AI", vendors[0].Name)
+	assert.Equal(t, "Moonshot", vendors[0].Icon)
 	assert.Equal(t, "OpenAI", vendors[1].Name)
+	assert.Equal(t, "OpenAI", vendors[1].Icon)
+}
+
+func TestModelsDevVendorsHaveLobeIconKeys(t *testing.T) {
+	namespaces := []string{
+		"alibaba", "anthropic", "cohere", "deepreinforce", "deepseek", "google",
+		"meituan", "meta", "microsoft", "minimax", "mistral", "moonshotai",
+		"nvidia", "openai", "perplexity", "poolside", "sakana", "sarvam",
+		"stepfun", "tencent", "thinkingmachines", "xai", "xiaomi", "zhipuai",
+	}
+
+	for _, namespace := range namespaces {
+		assert.NotEmpty(t, vendorIconKeys[namespace], namespace)
+	}
 }
 
 func TestParseModelsDevCatalogSkipsAmbiguousShortIDs(t *testing.T) {
