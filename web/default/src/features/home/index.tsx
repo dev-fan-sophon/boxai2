@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -39,19 +38,11 @@ import { useHomePageContent } from './hooks'
 
 export function Home() {
   const { i18n, t } = useTranslation()
-  const navigate = useNavigate()
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const { resolvedTheme } = useTheme()
   const { auth } = useAuthStore()
   const isAuthenticated = !!auth.user
   const { content, isLoaded, isUrl } = useHomePageContent()
-
-  // Logged-in users land in the console (Apilio-style entry), not marketing home.
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate({ to: '/dashboard', replace: true })
-    }
-  }, [isAuthenticated, navigate])
 
   const syncIframePreferences = useCallback(() => {
     try {
@@ -74,7 +65,7 @@ export function Home() {
     }
   }, [isUrl, syncIframePreferences])
 
-  if (!isLoaded || isAuthenticated) {
+  if (!isLoaded) {
     return (
       <PublicLayout showMainContainer={false}>
         <main className='flex min-h-screen items-center justify-center'>

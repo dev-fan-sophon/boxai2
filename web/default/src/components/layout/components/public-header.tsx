@@ -101,9 +101,9 @@ export function PublicHeader(props: PublicHeaderProps) {
   const isAuthenticated = !!user
   const displaySiteName = customSiteName || systemName
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
-  // Dashboard stays a CTA button (Apilio-style), not a primary strip link.
+  // Console entry stays a CTA button, not a primary strip link.
   // Still respect HeaderNavModules.console so admins can hide it.
-  const showDashboardCta =
+  const showConsoleCta =
     parseHeaderNavModulesFromStatus(status as Record<string, unknown> | null)
       .console !== false
 
@@ -151,14 +151,14 @@ export function PublicHeader(props: PublicHeaderProps) {
     navigate({ to: '/sign-in', search: { redirect } })
   }, [authPromptTarget?.href, navigate])
 
-  const openDashboardAuthPrompt = useCallback(
+  const openConsoleAuthPrompt = useCallback(
     (closeMobile = false) => {
       if (closeMobile) {
         setMobileOpen(false)
       }
       setAuthPromptSecondsLeft(AUTH_PROMPT_SECONDS)
       setAuthPromptTarget({
-        title: t('Dashboard'),
+        title: t('Console'),
         href: '/dashboard',
       })
     },
@@ -307,7 +307,7 @@ export function PublicHeader(props: PublicHeaderProps) {
                     <Skeleton className='h-8 w-20 rounded-lg' />
                   ) : (
                     <>
-                      {showDashboardCta &&
+                      {showConsoleCta &&
                         (isAuthenticated ? (
                           <Button
                             size='sm'
@@ -315,16 +315,16 @@ export function PublicHeader(props: PublicHeaderProps) {
                             render={<Link to='/dashboard' />}
                           >
                             <LayoutDashboard className='mr-1 size-3.5' />
-                            {t('Dashboard')}
+                            {t('Console')}
                           </Button>
                         ) : (
                           <Button
                             size='sm'
                             className='h-8 rounded-full bg-gradient-to-r from-blue-600 to-violet-600 px-3.5 text-xs font-medium text-white shadow-sm hover:from-blue-500 hover:to-violet-500'
-                            onClick={() => openDashboardAuthPrompt()}
+                            onClick={() => openConsoleAuthPrompt()}
                           >
                             <LayoutDashboard className='mr-1 size-3.5' />
-                            {t('Dashboard')}
+                            {t('Console')}
                           </Button>
                         ))}
                       {isAuthenticated ? (
@@ -452,22 +452,22 @@ export function PublicHeader(props: PublicHeaderProps) {
           >
             {showAuthButtons && (
               <div className='flex flex-col gap-2'>
-                {showDashboardCta &&
+                {showConsoleCta &&
                   (isAuthenticated ? (
                     <Link
                       to='/dashboard'
                       onClick={() => setMobileOpen(false)}
                       className='inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 text-sm font-medium text-white transition-opacity hover:opacity-90'
                     >
-                      {t('Dashboard')}
+                      {t('Console')}
                     </Link>
                   ) : (
                     <button
                       type='button'
-                      onClick={() => openDashboardAuthPrompt(true)}
+                      onClick={() => openConsoleAuthPrompt(true)}
                       className='inline-flex h-10 items-center justify-center rounded-full bg-gradient-to-r from-blue-600 to-violet-600 text-sm font-medium text-white transition-opacity hover:opacity-90'
                     >
-                      {t('Dashboard')}
+                      {t('Console')}
                     </button>
                   ))}
                 {!isAuthenticated && (
