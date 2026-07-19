@@ -1,0 +1,4 @@
+# Lessons
+
+- When BoxAI production management credentials are available locally, source the existing ignored admin environment and use the management API autonomously for routine, reversible configuration changes. Do not repeatedly ask the user to perform those settings manually; reserve confirmation for destructive or otherwise high-risk operations.
+- Treat light/dark theme requests as complete surface-mode changes unless the user explicitly asks for mixed chrome. Do not preserve a permanently dark header/sidebar in light mode merely because the existing brand palette was designed that way; verify the requested visual behavior before optimizing contrast within the wrong palette.

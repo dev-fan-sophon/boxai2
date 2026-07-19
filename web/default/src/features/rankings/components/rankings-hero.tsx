@@ -23,10 +23,10 @@ import { cn } from '@/lib/utils'
 import type { RankingPeriod } from '../types'
 
 const PERIODS: { id: RankingPeriod; labelKey: string }[] = [
-  { id: 'today', labelKey: 'Today' },
-  { id: 'week', labelKey: 'Week' },
-  { id: 'month', labelKey: 'Month' },
-  { id: 'year', labelKey: 'Year' },
+  { id: 'today', labelKey: '1 day' },
+  { id: 'week', labelKey: '1 week' },
+  { id: 'month', labelKey: '1 month' },
+  { id: 'year', labelKey: '1 year' },
 ]
 
 type RankingsHeroProps = {
@@ -48,11 +48,11 @@ export function RankingsHero(props: RankingsHeroProps) {
           {t('Live Insights')}
         </p>
         <h1 className='text-[clamp(1.75rem,4vw,2.5rem)] leading-[1.15] font-bold tracking-tight'>
-          {t('Rankings')}
+          {t('Popular Model Rankings')}
         </h1>
         <p className='text-muted-foreground/80 max-w-2xl text-sm'>
           {t(
-            'Discover the most-used models and rising vendors on the platform, updated from live usage data.'
+            'Track AI model usage trends to choose the best model — live platform data, no mock charts.'
           )}
         </p>
       </div>

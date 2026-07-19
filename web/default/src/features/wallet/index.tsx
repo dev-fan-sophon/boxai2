@@ -163,20 +163,23 @@ export function Wallet(props: WalletProps) {
     calculatePaymentAmount(amount, getCurrentPaymentType())
   }
 
-  // Handle payment method selection
+  // Select method only (Apilio-style step 01); recalculate due amount.
   const handlePaymentMethodSelect = async (method: PaymentMethod) => {
     setSelectedPaymentMethod(method)
-    setPaymentLoading(method.type)
+    await calculatePaymentAmount(topupAmount, method.type)
+  }
 
+  // Step 03 — open confirm dialog with real calculated amount.
+  const handleContinueToPay = async () => {
+    if (!selectedPaymentMethod) return
+    setPaymentLoading(selectedPaymentMethod.type)
     try {
-      // Validate minimum topup
       const minTopup = getMinTopupAmount(topupInfo)
-      if (topupAmount < minTopup) {
+      const methodMin = selectedPaymentMethod.min_topup || 0
+      if (topupAmount < Math.max(minTopup, methodMin)) {
         return
       }
-
-      // Calculate payment amount and show confirmation dialog
-      await calculatePaymentAmount(topupAmount, method.type)
+      await calculatePaymentAmount(topupAmount, selectedPaymentMethod.type)
       setConfirmDialogOpen(true)
     } finally {
       setPaymentLoading(null)
@@ -284,7 +287,9 @@ export function Wallet(props: WalletProps) {
                   onTopupAmountChange={handleTopupAmountChange}
                   paymentAmount={paymentAmount}
                   calculating={calculating}
+                  selectedPaymentMethod={selectedPaymentMethod}
                   onPaymentMethodSelect={handlePaymentMethodSelect}
+                  onContinueToPay={handleContinueToPay}
                   paymentLoading={paymentLoading}
                   redemptionCode={redemptionCode}
                   onRedemptionCodeChange={setRedemptionCode}

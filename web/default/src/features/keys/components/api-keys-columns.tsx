@@ -127,27 +127,31 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
         )
       },
       filterFn: (row, id, value) => value.includes(String(row.getValue(id))),
-      size: 120,
+      size: 100,
       meta: { mobileBadge: true },
     },
     {
-      id: 'key',
-      accessorKey: 'key',
-      header: t('API Key'),
-      cell: ({ row }) => <ApiKeyCell apiKey={row.original} />,
-      enableSorting: false,
-      size: 260,
+      id: 'used_quota',
+      accessorKey: 'used_quota',
+      header: t('Used quota'),
+      cell: ({ row }) => (
+        <span className='font-mono text-xs tabular-nums'>
+          {formatQuota(row.original.used_quota)}
+        </span>
+      ),
+      size: 110,
+      meta: { mobileHidden: true },
     },
     {
-      id: 'quota',
+      id: 'remain_quota',
       accessorKey: 'remain_quota',
-      header: t('Quota'),
+      header: t('Remaining quota'),
       cell: ({ row }) => {
         const apiKey = row.original
         if (apiKey.unlimited_quota) {
           return (
             <StatusBadge
-              label={t('Unlimited')}
+              label={t('Follow user')}
               variant='neutral'
               copyable={false}
               className='-ml-1.5'
@@ -162,14 +166,9 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
 
         return (
           <Tooltip>
-            <TooltipTrigger render={<div className='w-[150px] space-y-1' />}>
-              <div className='flex justify-between text-xs'>
-                <span className='font-medium tabular-nums'>
-                  {formatQuota(remaining)}
-                </span>
-                <span className='text-muted-foreground tabular-nums'>
-                  {formatQuota(total)}
-                </span>
+            <TooltipTrigger render={<div className='w-[130px] space-y-1' />}>
+              <div className='font-mono text-xs font-medium tabular-nums'>
+                {formatQuota(remaining)}
               </div>
               <Progress
                 value={percentage}
@@ -185,19 +184,24 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
                   {t('Remaining:')} {formatQuota(remaining)} (
                   {percentage.toFixed(1)}%)
                 </div>
-                <div>
-                  {t('Total:')} {formatQuota(total)}
-                </div>
               </div>
             </TooltipContent>
           </Tooltip>
         )
       },
-      size: 170,
+      size: 140,
+    },
+    {
+      id: 'key',
+      accessorKey: 'key',
+      header: t('Key'),
+      cell: ({ row }) => <ApiKeyCell apiKey={row.original} />,
+      enableSorting: false,
+      size: 160,
     },
     {
       accessorKey: 'group',
-      header: t('Group'),
+      header: t('Channel group'),
       cell: ({ row }) => {
         const apiKey = row.original
         const group = row.getValue('group') as string

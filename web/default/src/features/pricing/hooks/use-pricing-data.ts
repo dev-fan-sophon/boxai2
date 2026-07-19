@@ -43,9 +43,10 @@ export function usePricingData() {
   )
 
   const models = useMemo(() => {
-    if (!data?.data || !data?.vendors) return []
+    // Real /api/pricing payload only — empty list when the site has no models.
+    if (!data?.data?.length) return []
 
-    const vendorMap = new Map(data.vendors.map((v) => [v.id, v]))
+    const vendorMap = new Map((data.vendors ?? []).map((v) => [v.id, v]))
 
     return data.data.map((model) => {
       const vendor = model.vendor_id
@@ -54,9 +55,9 @@ export function usePricingData() {
       return {
         ...model,
         key: model.model_name,
-        vendor_name: vendor?.name,
-        vendor_icon: vendor?.icon,
-        vendor_description: vendor?.description,
+        vendor_name: vendor?.name ?? model.vendor_name,
+        vendor_icon: vendor?.icon ?? model.vendor_icon,
+        vendor_description: vendor?.description ?? model.vendor_description,
         group_ratio: data.group_ratio,
       }
     })

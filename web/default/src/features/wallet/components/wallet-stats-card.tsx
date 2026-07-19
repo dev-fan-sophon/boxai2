@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Activity, BarChart3, WalletCards } from 'lucide-react'
+import { Gift, Share2, Users, WalletCards } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { IconBadge, type IconBadgeTone } from '@/components/ui/icon-badge'
@@ -34,8 +34,8 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
   const { t } = useTranslation()
   if (props.loading) {
     return (
-      <div className='grid grid-cols-3 divide-x rounded-lg border'>
-        {['balance', 'usage', 'requests'].map((key) => (
+      <div className='grid grid-cols-2 divide-x rounded-lg border sm:grid-cols-4'>
+        {['balance', 'invites', 'earned', 'reward'].map((key) => (
           <div key={key} className='min-w-0 px-2.5 py-2.5 sm:px-5 sm:py-4'>
             <Skeleton className='h-3.5 w-full' />
             <Skeleton className='mt-2 h-6 w-full sm:h-7' />
@@ -46,6 +46,7 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
     )
   }
 
+  // Real user fields from /api/user/self — Apilio top-up hero metrics.
   const stats: {
     label: string
     value: string
@@ -54,30 +55,37 @@ export function WalletStatsCard(props: WalletStatsCardProps) {
     tone: IconBadgeTone
   }[] = [
     {
-      label: t('Current Balance'),
+      label: t('Available balance'),
       value: formatQuota(props.user?.quota ?? 0),
       description: t('Remaining quota'),
       icon: WalletCards,
       tone: 'success',
     },
     {
-      label: t('Total Usage'),
-      value: formatQuota(props.user?.used_quota ?? 0),
-      description: t('Total consumed quota'),
-      icon: BarChart3,
+      label: t('Invited users'),
+      value: (props.user?.aff_count ?? 0).toLocaleString(),
+      description: t('Successful referrals'),
+      icon: Users,
       tone: 'info',
     },
     {
-      label: t('API Requests'),
-      value: (props.user?.request_count ?? 0).toLocaleString(),
-      description: t('Total requests made'),
-      icon: Activity,
+      label: t('Total earnings'),
+      value: formatQuota(props.user?.aff_history_quota ?? 0),
+      description: t('Lifetime affiliate rewards'),
+      icon: Share2,
+      tone: 'chart-3',
+    },
+    {
+      label: t('Reward balance'),
+      value: formatQuota(props.user?.aff_quota ?? 0),
+      description: t('Transferable to balance'),
+      icon: Gift,
       tone: 'chart-4',
     },
   ]
 
   return (
-    <div className='grid grid-cols-3 divide-x rounded-lg border'>
+    <div className='grid grid-cols-2 divide-x divide-y rounded-lg border sm:grid-cols-4 sm:divide-y-0'>
       {stats.map((item) => (
         <div key={item.label} className='min-w-0 px-2.5 py-2.5 sm:px-5 sm:py-4'>
           <div className='flex items-center gap-1.5 sm:gap-2.5'>

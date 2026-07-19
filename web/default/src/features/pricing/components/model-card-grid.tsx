@@ -45,7 +45,7 @@ export interface ModelCardGridProps {
 function modelsListSignature(models: PricingModel[]): string {
   if (models.length === 0) return '0'
   const first = models[0]
-  const last = models[models.length - 1]
+  const last = models.at(-1)
   const mid = models[Math.floor(models.length / 2)]
   return [
     models.length,
@@ -147,12 +147,19 @@ export function ModelCardGrid(props: ModelCardGridProps) {
                   <h2 className='truncate text-sm font-semibold tracking-tight sm:text-base'>
                     {group.name}
                   </h2>
-                  <p className='text-muted-foreground text-xs'>{countLabel}</p>
+                  <p className='text-muted-foreground text-xs'>
+                    {t('{{count}} available services', {
+                      count: totalForVendor,
+                    })}
+                    {shownForVendor < totalForVendor
+                      ? ` · ${countLabel}`
+                      : null}
+                  </p>
                 </div>
               </div>
             </header>
 
-            <div className='grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 lg:grid-cols-3'>
+            <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-3.5 lg:grid-cols-3 xl:grid-cols-4'>
               {group.models.map((model) => (
                 <ModelCard
                   key={model.id ?? model.model_name}

@@ -74,7 +74,9 @@ export function useFilters(models: PricingModel[]) {
   const endpointTypeFilter = filterState.endpointType || ENDPOINT_TYPES.ALL
   const tagFilter = filterState.tag || FILTER_ALL
   const tokenUnit: TokenUnit =
-    filterState.tokenUnit === 'K' ? 'K' : DEFAULT_TOKEN_UNIT
+    filterState.tokenUnit === 'K' || filterState.tokenUnit === 'M'
+      ? filterState.tokenUnit
+      : DEFAULT_TOKEN_UNIT
   const viewMode = normalizeViewMode(filterState.view)
   const showRechargePrice = filterState.rechargePrice === true
 

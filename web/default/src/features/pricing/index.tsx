@@ -186,18 +186,30 @@ export function Pricing() {
                 'Explore AI services across the platform — transparent pricing, ready to use'
               )}
             </p>
-            <p className='text-muted-foreground/60 mx-auto mt-2 max-w-2xl text-xs leading-relaxed sm:text-sm'>
-              {t('This site currently has {{count}} models enabled', {
-                count: models?.length || 0,
-              })}
-            </p>
+            <div className='text-muted-foreground mt-4 flex items-center justify-center gap-6 text-xs tracking-wide uppercase sm:gap-10 sm:text-sm'>
+              <div>
+                <p className='text-muted-foreground/70 text-[10px] font-medium tracking-[0.14em]'>
+                  {t('Services')}
+                </p>
+                <p className='text-foreground mt-0.5 font-mono text-xl font-semibold tabular-nums sm:text-2xl'>
+                  {models?.length || 0}
+                </p>
+              </div>
+              <div className='bg-border h-8 w-px' aria-hidden />
+              <div>
+                <p className='text-muted-foreground/70 text-[10px] font-medium tracking-[0.14em]'>
+                  {t('Sources')}
+                </p>
+                <p className='text-foreground mt-0.5 font-mono text-xl font-semibold tabular-nums sm:text-2xl'>
+                  {vendors?.length || 0}
+                </p>
+              </div>
+            </div>
             <SearchBar
               value={searchInput}
               onChange={setSearchInput}
               onClear={clearSearch}
-              placeholder={t(
-                'Search model name, provider, endpoint, or tag...'
-              )}
+              placeholder={t('Search service name, tags, source...')}
               className='mx-auto mt-4 max-w-2xl sm:mt-6'
             />
           </header>

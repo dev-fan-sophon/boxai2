@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TFunction } from 'i18next'
+import type { TFunction } from 'i18next'
 
 import type { TokenUnit } from './types'
 
@@ -130,8 +130,8 @@ export const TOKEN_UNIT_DIVISORS = {
   K: 1000,
 } as const
 
-/** Default token unit for pricing display */
-export const DEFAULT_TOKEN_UNIT: TokenUnit = 'M'
+/** Default token unit for pricing display (Apilio-style per-K tokens) */
+export const DEFAULT_TOKEN_UNIT: TokenUnit = 'K'
 
 /** View mode options */
 export const VIEW_MODES = {
@@ -141,5 +141,5 @@ export const VIEW_MODES = {
 
 export type ViewMode = (typeof VIEW_MODES)[keyof typeof VIEW_MODES]
 
-/** Default page size for pricing table */
-export const DEFAULT_PRICING_PAGE_SIZE = 20
+/** Default page size for pricing table / Model Hub card wall */
+export const DEFAULT_PRICING_PAGE_SIZE = 48
