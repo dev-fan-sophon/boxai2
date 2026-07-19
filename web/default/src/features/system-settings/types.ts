@@ -34,6 +34,16 @@ export type UpdateOptionRequest = {
   value: string | boolean | number
 }
 
+export type BankQRSettings = {
+  enabled: boolean
+  bank_name: string
+  bank_bin: string
+  account_number: string
+  account_name: string
+  min_topup: number
+  transfer_prefix: string
+}
+
 export type UpdateOptionResponse = {
   success: boolean
   message: string
@@ -306,6 +316,13 @@ export type BillingSettings = {
   CreemWebhookSecret: string
   CreemTestMode: boolean
   CreemProducts: string
+  'bank_qr_setting.enabled': boolean
+  'bank_qr_setting.bank_name': string
+  'bank_qr_setting.bank_bin': string
+  'bank_qr_setting.account_number': string
+  'bank_qr_setting.account_name': string
+  'bank_qr_setting.min_topup': number
+  'bank_qr_setting.transfer_prefix': string
   WaffoEnabled: boolean
   WaffoApiKey: string
   WaffoPrivateKey: string

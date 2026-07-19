@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -36,6 +37,30 @@ func (cm *ConfigManager) Get(name string) interface{} {
 	cm.mutex.RLock()
 	defer cm.mutex.RUnlock()
 	return cm.configs[name]
+}
+
+func (cm *ConfigManager) UpdateRegistered(name string, values map[string]string) error {
+	cm.mutex.Lock()
+	defer cm.mutex.Unlock()
+	cfg := cm.configs[name]
+	if cfg == nil {
+		return fmt.Errorf("config %q is not registered", name)
+	}
+	return updateConfigFromMap(cfg, values)
+}
+
+func (cm *ConfigManager) CopyRegistered(name string, target interface{}) error {
+	cm.mutex.RLock()
+	defer cm.mutex.RUnlock()
+	cfg := cm.configs[name]
+	if cfg == nil {
+		return fmt.Errorf("config %q is not registered", name)
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, target)
 }
 
 // LoadFromDB 从数据库加载配置

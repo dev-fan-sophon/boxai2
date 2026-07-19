@@ -25,6 +25,7 @@ import { useSystemConfig } from '@/hooks/use-system-config'
 import { getSelf } from '@/lib/api'
 
 import { AffiliateRewardsCard } from './components/affiliate-rewards-card'
+import { BankQRPaymentDialog } from './components/dialogs/bank-qr-payment-dialog'
 import { BillingHistoryDialog } from './components/dialogs/billing-history-dialog'
 import { CreemConfirmDialog } from './components/dialogs/creem-confirm-dialog'
 import { PaymentConfirmDialog } from './components/dialogs/payment-confirm-dialog'
@@ -41,13 +42,16 @@ import {
   useCreemPayment,
   useWaffoPayment,
   useWaffoPancakePayment,
+  useBankQRPayment,
 } from './hooks'
 import {
   getDefaultPaymentType,
   getMinTopupAmount,
+  isBankQRPayment,
   isWaffoPancakePayment,
 } from './lib'
 import type {
+  BankQRPaymentData,
   UserWalletData,
   PaymentMethod,
   PresetAmount,
@@ -75,6 +79,10 @@ export function Wallet(props: WalletProps) {
   const [selectedCreemProduct, setSelectedCreemProduct] =
     useState<CreemProduct | null>(null)
   const [showSubscriptionPanel, setShowSubscriptionPanel] = useState(true)
+  const [bankQRDialogOpen, setBankQRDialogOpen] = useState(false)
+  const [bankQRPayment, setBankQRPayment] = useState<BankQRPaymentData | null>(
+    null
+  )
 
   const { status } = useStatus()
   const { currency } = useSystemConfig()
@@ -104,6 +112,8 @@ export function Wallet(props: WalletProps) {
   const { processWaffoPayment } = useWaffoPayment()
   const { processing: pancakeProcessing, processWaffoPancakePayment } =
     useWaffoPancakePayment()
+  const { processing: bankQRProcessing, processBankQRPayment } =
+    useBankQRPayment()
 
   // Fetch and refresh user data
   const fetchUser = useCallback(async () => {
@@ -179,7 +189,11 @@ export function Wallet(props: WalletProps) {
       if (topupAmount < Math.max(minTopup, methodMin)) {
         return
       }
-      await calculatePaymentAmount(topupAmount, selectedPaymentMethod.type)
+      const calculatedAmount = await calculatePaymentAmount(
+        topupAmount,
+        selectedPaymentMethod.type
+      )
+      if (calculatedAmount === null) return
       setConfirmDialogOpen(true)
     } finally {
       setPaymentLoading(null)
@@ -189,6 +203,16 @@ export function Wallet(props: WalletProps) {
   // Handle payment confirmation
   const handlePaymentConfirm = async () => {
     if (!selectedPaymentMethod) return
+
+    if (isBankQRPayment(selectedPaymentMethod.type)) {
+      const bankPayment = await processBankQRPayment(topupAmount)
+      if (bankPayment) {
+        setConfirmDialogOpen(false)
+        setBankQRPayment(bankPayment)
+        setBankQRDialogOpen(true)
+      }
+      return
+    }
 
     const isPancake = isWaffoPancakePayment(selectedPaymentMethod.type)
     const success = isPancake
@@ -342,7 +366,7 @@ export function Wallet(props: WalletProps) {
         paymentAmount={paymentAmount}
         paymentMethod={selectedPaymentMethod}
         calculating={calculating}
-        processing={processing || pancakeProcessing}
+        processing={processing || pancakeProcessing || bankQRProcessing}
         discountRate={getDiscountRate()}
         usdExchangeRate={effectiveUsdExchangeRate}
       />
@@ -366,6 +390,12 @@ export function Wallet(props: WalletProps) {
         onConfirm={handleCreemConfirm}
         product={selectedCreemProduct}
         processing={creemProcessing}
+      />
+
+      <BankQRPaymentDialog
+        open={bankQRDialogOpen}
+        onOpenChange={setBankQRDialogOpen}
+        payment={bankQRPayment}
       />
     </>
   )

@@ -148,6 +148,16 @@ const BILLING_SECTIONS = [
           CreemWebhookSecret: settings.CreemWebhookSecret,
           CreemTestMode: settings.CreemTestMode,
           CreemProducts: settings.CreemProducts,
+          bank_qr_setting: {
+            enabled: settings['bank_qr_setting.enabled'] ?? false,
+            bank_name: settings['bank_qr_setting.bank_name'] ?? '',
+            bank_bin: settings['bank_qr_setting.bank_bin'] ?? '',
+            account_number: settings['bank_qr_setting.account_number'] ?? '',
+            account_name: settings['bank_qr_setting.account_name'] ?? '',
+            min_topup: settings['bank_qr_setting.min_topup'] ?? 1,
+            transfer_prefix:
+              settings['bank_qr_setting.transfer_prefix'] ?? 'BOXAI',
+          },
         }}
         waffoDefaultValues={{
           WaffoEnabled: settings.WaffoEnabled ?? false,

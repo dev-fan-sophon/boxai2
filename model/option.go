@@ -187,13 +187,17 @@ func InitOptionMap() {
 }
 
 func loadOptionsFromDatabase() {
-	options, _ := AllOption()
-	for _, option := range options {
-		err := updateOptionMap(option.Key, option.Value)
-		if err != nil {
-			common.SysLog("failed to update option map: " + err.Error())
+	_ = operation_setting.WithBankQRSettingsUpdate(func() error {
+		options, _ := AllOption()
+		for _, option := range options {
+			err := updateOptionMap(option.Key, option.Value)
+			if err != nil {
+				common.SysLog("failed to update option map: " + err.Error())
+			}
 		}
-	}
+		operation_setting.PublishBankQRSetting()
+		return nil
+	})
 }
 
 func SyncOptions(frequency int) {
@@ -585,6 +589,9 @@ func handleConfigUpdate(key, value string) bool {
 
 	configName := parts[0]
 	configKey := parts[1]
+	if configName == "bank_qr_setting" {
+		return operation_setting.UpdateBankQRConfigField(configKey, value) == nil
+	}
 
 	// 获取配置对象
 	cfg := config.GlobalConfig.Get(configName)

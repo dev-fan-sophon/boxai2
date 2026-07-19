@@ -39,6 +39,8 @@ import type {
   WaffoPaymentResponse,
   WaffoPancakePaymentRequest,
   WaffoPancakePaymentResponse,
+  BankQRAmountResponse,
+  BankQRPaymentResponse,
 } from './types'
 
 // ============================================================================
@@ -94,6 +96,15 @@ export async function calculateStripeAmount(
   return res.data
 }
 
+export async function calculateBankQRAmount(
+  request: AmountRequest
+): Promise<BankQRAmountResponse> {
+  const res = await api.post('/api/user/bank-qr/amount', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
 /**
  * Request regular payment
  */
@@ -116,6 +127,15 @@ export async function requestStripePayment(
   request: PaymentRequest
 ): Promise<StripePaymentResponse> {
   const res = await api.post('/api/user/stripe/pay', request, {
+    skipBusinessError: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+export async function requestBankQRPayment(
+  request: AmountRequest
+): Promise<BankQRPaymentResponse> {
+  const res = await api.post('/api/user/bank-qr/pay', request, {
     skipBusinessError: true,
   } as Record<string, unknown>)
   return res.data

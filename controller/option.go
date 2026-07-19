@@ -161,6 +161,10 @@ func UpdateOption(c *gin.Context) {
 		})
 		return
 	}
+	if strings.HasPrefix(option.Key, "bank_qr_setting.") {
+		common.ApiErrorMsg(c, "Use the bank QR settings endpoint")
+		return
+	}
 	switch option.Value.(type) {
 	case bool:
 		option.Value = common.Interface2String(option.Value.(bool))

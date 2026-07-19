@@ -59,6 +59,22 @@ export type WaffoPancakePaymentResponse = ApiResponse<
     }
   | string
 >
+export interface BankQRPaymentData {
+  trade_no: string
+  transfer_content: string
+  amount: number
+  currency: 'VND'
+  payload: string
+  bank_name: string
+  bank_bin: string
+  account_number: string
+  account_name: string
+}
+export type BankQRAmountResponse = ApiResponse<{
+  amount: number
+  currency: 'VND'
+}>
+export type BankQRPaymentResponse = ApiResponse<BankQRPaymentData>
 
 /**
  * Creem product configuration
@@ -124,6 +140,10 @@ export interface TopupInfo {
   enable_online_topup: boolean
   /** Whether Stripe topup is enabled */
   enable_stripe_topup: boolean
+  /** Whether manually confirmed VietQR bank transfer is enabled */
+  enable_bank_qr_topup?: boolean
+  /** Minimum USD-equivalent topup amount for bank QR */
+  bank_qr_min_topup?: number
   /** Available payment methods */
   pay_methods: PaymentMethod[]
   /** Minimum topup amount for online topup */
@@ -265,6 +285,8 @@ export interface TopupRecord {
   trade_no: string
   /** Payment method type */
   payment_method: string
+  /** Payment provider that created the order */
+  payment_provider?: string
   /** Creation timestamp */
   create_time: number
   /** Completion timestamp */

@@ -24,10 +24,18 @@ import (
 func GetTopUpInfo(c *gin.Context) {
 	complianceConfirmed := operation_setting.IsPaymentComplianceConfirmed()
 
-	// 获取支付方式
-	payMethods := operation_setting.PayMethods
-	if !complianceConfirmed {
-		payMethods = []map[string]string{}
+	// 仅暴露实际已配置的易支付方式，避免其他网关启用后把不可用的占位方式带到前端。
+	payMethods := make([]map[string]string, 0, len(operation_setting.PayMethods)+4)
+	if complianceConfirmed && isEpayTopUpEnabled() {
+		payMethods = append(payMethods, operation_setting.PayMethods...)
+	}
+
+	enableBankQR := isBankQRTopUpEnabled()
+	if enableBankQR {
+		payMethods = append(payMethods, map[string]string{
+			"name": "Bank QR", "type": model.PaymentMethodBankQR,
+			"min_topup": strconv.FormatInt(operation_setting.GetBankQRSetting().MinTopUp, 10),
+		})
 	}
 
 	// 如果启用了 Stripe 支付，添加到支付方法列表
@@ -97,6 +105,8 @@ func GetTopUpInfo(c *gin.Context) {
 
 	data := gin.H{
 		"enable_online_topup":              isEpayTopUpEnabled(),
+		"enable_bank_qr_topup":             enableBankQR,
+		"bank_qr_min_topup":                operation_setting.GetBankQRSetting().MinTopUp,
 		"enable_stripe_topup":              isStripeTopUpEnabled(),
 		"enable_creem_topup":               isCreemTopUpEnabled(),
 		"enable_waffo_topup":               enableWaffo,

@@ -11,6 +11,10 @@ func isPaymentComplianceConfirmed() bool {
 	return operation_setting.IsPaymentComplianceConfirmed()
 }
 
+func isBankQRTopUpEnabled() bool {
+	return isPaymentComplianceConfirmed() && operation_setting.IsBankQRConfigured()
+}
+
 func isStripeTopUpEnabled() bool {
 	if !isPaymentComplianceConfirmed() {
 		return false

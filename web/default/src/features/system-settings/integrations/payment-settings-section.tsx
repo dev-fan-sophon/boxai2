@@ -41,6 +41,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 
+import { updateBankQRSettings } from '../api'
 import {
   SettingsForm,
   SettingsSwitchContent,
@@ -151,6 +152,45 @@ const paymentSchema = z.object({
       })
     }
   }),
+  bank_qr_setting: z
+    .object({
+      enabled: z.boolean(),
+      bank_name: z.string().max(80),
+      bank_bin: z
+        .string()
+        .regex(/^\d{6}$|^$/, 'Bank BIN must contain 6 digits'),
+      account_number: z
+        .string()
+        .regex(/^\d{1,19}$|^$/, 'Account number must contain 1 to 19 digits'),
+      account_name: z.string().max(80),
+      min_topup: z.coerce.number().int().min(1),
+      transfer_prefix: z
+        .string()
+        .regex(
+          /^[A-Za-z0-9 _-]{1,20}$/,
+          'Transfer prefix may contain letters, numbers, spaces, hyphens, and underscores'
+        ),
+    })
+    .superRefine((value, ctx) => {
+      if (!value.enabled) return
+
+      const requiredFields = [
+        ['bank_name', value.bank_name],
+        ['bank_bin', value.bank_bin],
+        ['account_number', value.account_number],
+        ['account_name', value.account_name],
+        ['transfer_prefix', value.transfer_prefix],
+      ] as const
+      for (const [field, fieldValue] of requiredFields) {
+        if (!fieldValue.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [field],
+            message: 'Required when bank QR top-up is enabled',
+          })
+        }
+      }
+    }),
   WaffoEnabled: z.boolean(),
   WaffoApiKey: z.string(),
   WaffoPrivateKey: z.string(),
@@ -344,6 +384,15 @@ export function PaymentSettingsSection({
       CreemWebhookSecret: values.CreemWebhookSecret.trim(),
       CreemTestMode: values.CreemTestMode,
       CreemProducts: values.CreemProducts.trim(),
+      bank_qr_setting: {
+        enabled: values.bank_qr_setting.enabled,
+        bank_name: values.bank_qr_setting.bank_name.trim(),
+        bank_bin: values.bank_qr_setting.bank_bin.trim(),
+        account_number: values.bank_qr_setting.account_number.trim(),
+        account_name: values.bank_qr_setting.account_name.trim(),
+        min_topup: values.bank_qr_setting.min_topup,
+        transfer_prefix: values.bank_qr_setting.transfer_prefix.trim(),
+      },
       WaffoEnabled: values.WaffoEnabled,
       WaffoSandbox: values.WaffoSandbox,
       WaffoMerchantId: values.WaffoMerchantId.trim(),
@@ -389,6 +438,17 @@ export function PaymentSettingsSection({
       CreemWebhookSecret: initialRef.current.CreemWebhookSecret.trim(),
       CreemTestMode: initialRef.current.CreemTestMode,
       CreemProducts: initialRef.current.CreemProducts.trim(),
+      bank_qr_setting: {
+        enabled: initialRef.current.bank_qr_setting.enabled,
+        bank_name: initialRef.current.bank_qr_setting.bank_name.trim(),
+        bank_bin: initialRef.current.bank_qr_setting.bank_bin.trim(),
+        account_number:
+          initialRef.current.bank_qr_setting.account_number.trim(),
+        account_name: initialRef.current.bank_qr_setting.account_name.trim(),
+        min_topup: initialRef.current.bank_qr_setting.min_topup,
+        transfer_prefix:
+          initialRef.current.bank_qr_setting.transfer_prefix.trim(),
+      },
       WaffoEnabled: initialRef.current.WaffoEnabled,
       WaffoSandbox: initialRef.current.WaffoSandbox,
       WaffoMerchantId: initialRef.current.WaffoMerchantId.trim(),
@@ -536,6 +596,16 @@ export function PaymentSettingsSection({
       updates.push({ key: 'CreemProducts', value: sanitized.CreemProducts })
     }
 
+    const hasBankQRChanges = Object.keys(sanitized.bank_qr_setting).some(
+      (key) => {
+        const settingKey = key as keyof typeof sanitized.bank_qr_setting
+        return (
+          sanitized.bank_qr_setting[settingKey] !==
+          initial.bank_qr_setting[settingKey]
+        )
+      }
+    )
+
     if (sanitized.WaffoEnabled !== initial.WaffoEnabled) {
       updates.push({ key: 'WaffoEnabled', value: sanitized.WaffoEnabled })
     }
@@ -615,13 +685,23 @@ export function PaymentSettingsSection({
       waffoPancakeSelection.storeID !== waffoPancakeSavedBinding.storeID ||
       waffoPancakeSelection.productID !== waffoPancakeSavedBinding.productID
 
-    if (updates.length === 0 && !hasWaffoPancakeChanges) {
+    if (updates.length === 0 && !hasBankQRChanges && !hasWaffoPancakeChanges) {
       toast.info(t('No changes to save'))
       return
     }
 
     for (const update of updates) {
       await updateOption.mutateAsync(update)
+    }
+
+    if (hasBankQRChanges) {
+      const response = await updateBankQRSettings(sanitized.bank_qr_setting)
+      if (!response.success) {
+        toast.error(response.message || t('Failed to update setting'))
+        return
+      }
+      await queryClient.invalidateQueries({ queryKey: ['system-options'] })
+      toast.success(t('Setting updated successfully'))
     }
 
     if (!hasWaffoPancakeChanges) {
@@ -718,9 +798,10 @@ export function PaymentSettingsSection({
           />
           <Tabs defaultValue='general' className='min-w-0'>
             <div className='overflow-x-auto pb-1'>
-              <TabsList className='grid min-w-[44rem] grid-cols-6'>
+              <TabsList className='grid min-w-[52rem] grid-cols-7'>
                 <TabsTrigger value='general'>{t('General')}</TabsTrigger>
                 <TabsTrigger value='epay'>Epay</TabsTrigger>
+                <TabsTrigger value='bank-qr'>{t('Bank QR')}</TabsTrigger>
                 <TabsTrigger value='stripe'>{t('Stripe')}</TabsTrigger>
                 <TabsTrigger value='creem'>Creem</TabsTrigger>
                 <TabsTrigger value='waffo-pancake'>Waffo Pancake</TabsTrigger>
@@ -1073,6 +1154,164 @@ export function PaymentSettingsSection({
                         </FormControl>
                         <FormDescription>
                           {t('Leave blank unless rotating the secret')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value='bank-qr' className={paymentTabContentClassName}>
+              <div className='space-y-6'>
+                <div>
+                  <h3 className='text-lg font-medium'>
+                    {t('Vietnam bank QR')}
+                  </h3>
+                  <p className='text-muted-foreground text-sm'>
+                    {t(
+                      'Create VietQR transfer orders that an administrator confirms after checking the bank statement.'
+                    )}
+                  </p>
+                </div>
+
+                <SettingsSwitchItem>
+                  <SettingsSwitchContent>
+                    <FormLabel>{t('Enable bank QR top-up')}</FormLabel>
+                    <FormDescription>
+                      {t(
+                        'The option becomes available only when all bank details are valid and VND is the display currency.'
+                      )}
+                    </FormDescription>
+                  </SettingsSwitchContent>
+                  <FormField
+                    control={form.control}
+                    name='bank_qr_setting.enabled'
+                    render={({ field }) => (
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                      </FormControl>
+                    )}
+                  />
+                </SettingsSwitchItem>
+
+                <Alert>
+                  <ShieldAlert className='h-4 w-4' />
+                  <AlertTitle>{t('Manual confirmation')}</AlertTitle>
+                  <AlertDescription>
+                    {t(
+                      'Bank transfers remain pending until an administrator verifies the amount and transfer content, then completes the order from billing history.'
+                    )}
+                  </AlertDescription>
+                </Alert>
+
+                <div className='grid gap-6 md:grid-cols-2'>
+                  <FormField
+                    control={form.control}
+                    name='bank_qr_setting.bank_name'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Vietnam bank name')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder='Vietcombank' {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='bank_qr_setting.bank_bin'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Bank BIN')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            inputMode='numeric'
+                            maxLength={6}
+                            placeholder='970436'
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Six-digit NAPAS bank BIN code')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='bank_qr_setting.account_number'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Receiving account number')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            inputMode='numeric'
+                            maxLength={19}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='bank_qr_setting.account_name'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Account holder name')}</FormLabel>
+                        <FormControl>
+                          <Input placeholder='NGUYEN VAN A' {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='bank_qr_setting.min_topup'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Minimum top-up (USD)')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type='number'
+                            min={1}
+                            step={1}
+                            {...safeNumberFieldProps(field)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t('Minimum USD-equivalent credit per bank transfer')}
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name='bank_qr_setting.transfer_prefix'
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('Transfer content prefix')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            maxLength={20}
+                            placeholder='BOXAI'
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          {t(
+                            'Used to generate a unique transfer content for matching bank statements.'
+                          )}
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

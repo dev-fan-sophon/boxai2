@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
@@ -30,6 +31,7 @@ const (
 	PaymentMethodWaffo        = "waffo"
 	PaymentMethodWaffoPancake = "waffo_pancake"
 	PaymentMethodBalance      = "balance"
+	PaymentMethodBankQR       = "bank_qr"
 )
 
 const (
@@ -39,6 +41,7 @@ const (
 	PaymentProviderWaffo        = "waffo"
 	PaymentProviderWaffoPancake = "waffo_pancake"
 	PaymentProviderBalance      = "balance"
+	PaymentProviderBankQR       = "bank_qr"
 )
 
 var (
@@ -46,6 +49,23 @@ var (
 	ErrTopUpNotFound         = errors.New("topup not found")
 	ErrTopUpStatusInvalid    = errors.New("topup status invalid")
 )
+
+func BankQRQuota(amount int64) (int, error) {
+	quotaPerUnit := common.QuotaPerUnit
+	if amount <= 0 || quotaPerUnit <= 0 || math.IsNaN(quotaPerUnit) || math.IsInf(quotaPerUnit, 0) {
+		return 0, errors.New("invalid bank QR credit amount or quota unit")
+	}
+	quota, clamp := common.QuotaFromDecimalChecked(
+		decimal.NewFromInt(amount).Mul(decimal.NewFromFloat(quotaPerUnit)),
+	)
+	if clamp != nil {
+		return 0, clamp
+	}
+	if quota <= 0 {
+		return 0, errors.New("invalid bank QR credit quota")
+	}
+	return quota, nil
+}
 
 func (topUp *TopUp) Insert() error {
 	var err error
@@ -331,6 +351,7 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 	var quotaToAdd int
 	var payMoney float64
 	var paymentMethod string
+	var completed bool
 
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		topUp := &TopUp{}
@@ -354,6 +375,12 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 		if topUp.PaymentProvider == PaymentProviderStripe {
 			dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
 			quotaToAdd = int(decimal.NewFromFloat(topUp.Money).Mul(dQuotaPerUnit).IntPart())
+		} else if topUp.PaymentProvider == PaymentProviderBankQR {
+			var err error
+			quotaToAdd, err = BankQRQuota(topUp.Amount)
+			if err != nil {
+				return err
+			}
 		} else {
 			dAmount := decimal.NewFromInt(topUp.Amount)
 			dQuotaPerUnit := decimal.NewFromFloat(common.QuotaPerUnit)
@@ -378,11 +405,15 @@ func ManualCompleteTopUp(tradeNo string, callerIp string) error {
 		userId = topUp.UserId
 		payMoney = topUp.Money
 		paymentMethod = topUp.PaymentMethod
+		completed = true
 		return nil
 	})
 
 	if err != nil {
 		return err
+	}
+	if !completed {
+		return nil
 	}
 
 	// 事务外记录日志，避免阻塞
