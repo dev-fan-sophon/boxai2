@@ -22,6 +22,7 @@ import {
   CreditCard,
   FileText,
   FlaskConical,
+  HeartPulse,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -63,6 +64,11 @@ export function useSidebarData(): SidebarData {
             activeUrls: ['/dashboard'],
             configUrls: ['/dashboard', '/dashboard/overview', '/dashboard/models'],
             icon: LayoutDashboard,
+          },
+          {
+            title: t('Group status'),
+            url: '/group-status',
+            icon: HeartPulse,
           },
           {
             title: t('API Keys'),

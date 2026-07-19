@@ -2,9 +2,12 @@ package controller
 
 import (
 	"net/http"
+	"sort"
 	"strconv"
 
+	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -78,5 +81,47 @@ func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupRes
 	return lo.Filter(groups, func(g perfmetrics.GroupResult, _ int) bool {
 		_, ok := activeRatios[g.Group]
 		return ok || g.Group == "auto"
+	})
+}
+
+// GetUserGroupStatus returns per-group model availability built from real
+// relay perf_metrics (success-rate windows), for the authenticated user's
+// usable groups.
+func GetUserGroupStatus(c *gin.Context) {
+	userId := c.GetInt("id")
+	userGroup, _ := model.GetUserGroup(userId, false)
+	userUsableGroups := service.GetUserUsableGroups(userGroup)
+
+	groupNames := make([]string, 0)
+	for groupName := range ratio_setting.GetGroupRatioCopy() {
+		if groupName == "" || groupName == "auto" {
+			continue
+		}
+		if _, ok := userUsableGroups[groupName]; ok {
+			groupNames = append(groupNames, groupName)
+		}
+	}
+	if len(groupNames) == 0 {
+		if userGroup != "" && userGroup != "auto" {
+			groupNames = []string{userGroup}
+		} else {
+			groupNames = []string{"default"}
+		}
+	}
+	sort.Strings(groupNames)
+
+	data, err := perfmetrics.QueryGroupStatus(groupNames)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+		"data":    data,
 	})
 }
