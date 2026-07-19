@@ -36,10 +36,15 @@ type SidebarModulesUserConfig = SidebarModulesAdminConfig | null
 /**
  * Default sidebar modules configuration
  */
+/**
+ * Apilio-style defaults for regular console:
+ * Dashboard / Token / Wallet / Chat / Logs — hide Playground by default.
+ * Admin section remains available for admin roles (still gated by role checks).
+ */
 const DEFAULT_SIDEBAR_MODULES: SidebarModulesAdminConfig = {
   chat: {
     enabled: true,
-    playground: true,
+    playground: false,
     chat: true,
   },
   console: {

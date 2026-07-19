@@ -42,8 +42,11 @@ import { ROLE } from '@/lib/roles'
 /**
  * Root navigation groups for the application sidebar.
  *
- * These are shown when the URL does not match any nested sidebar view
- * registered in `layout/lib/sidebar-view-registry.ts`.
+ * Order mirrors Apilio-style console:
+ *   Console (Dashboard / Token / Wallet) → Tools (Chat) → Logs → Personal → Admin
+ *
+ * Visibility is further gated by SidebarModulesAdmin / user sidebar_modules
+ * via {@link useSidebarConfig}.
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -51,39 +54,52 @@ export function useSidebarData(): SidebarData {
   return {
     navGroups: [
       {
-        id: 'chat',
-        title: t('Chat'),
+        id: 'console',
+        title: t('Console'),
         items: [
-          {
-            title: t('Playground'),
-            url: '/playground',
-            icon: FlaskConical,
-          },
-          {
-            title: t('Chat'),
-            icon: MessageSquare,
-            type: 'chat-presets',
-          },
-        ],
-      },
-      {
-        id: 'general',
-        title: t('General'),
-        items: [
-          {
-            title: t('Overview'),
-            url: '/dashboard/overview',
-            icon: Activity,
-          },
           {
             title: t('Dashboard'),
-            url: '/dashboard/models',
+            url: '/dashboard/overview',
+            activeUrls: ['/dashboard'],
+            configUrls: ['/dashboard', '/dashboard/overview', '/dashboard/models'],
             icon: LayoutDashboard,
           },
           {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
+          },
+          {
+            title: t('Wallet'),
+            url: '/wallet',
+            icon: Wallet,
+          },
+        ],
+      },
+      {
+        id: 'tools',
+        title: t('Tools'),
+        items: [
+          {
+            title: t('Chat'),
+            icon: MessageSquare,
+            type: 'chat-presets',
+          },
+          {
+            title: t('Playground'),
+            url: '/playground',
+            icon: FlaskConical,
+          },
+        ],
+      },
+      {
+        id: 'logs',
+        title: t('Log monitoring'),
+        items: [
+          {
+            title: t('Analytics'),
+            url: '/dashboard/models',
+            icon: Activity,
           },
           {
             title: t('Usage Logs'),
@@ -103,11 +119,6 @@ export function useSidebarData(): SidebarData {
         id: 'personal',
         title: t('Personal'),
         items: [
-          {
-            title: t('Wallet'),
-            url: '/wallet',
-            icon: Wallet,
-          },
           {
             title: t('Profile'),
             url: '/profile',
