@@ -21,14 +21,16 @@ import { useMemo } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
 
-import { getPricing } from '../api'
+import { getPlaygroundCatalog, getPricing } from '../api'
 
-export function usePricingData() {
+type PricingDataSource = 'pricing' | 'playground'
+
+export function usePricingData(source: PricingDataSource = 'pricing') {
   const { status } = useStatus()
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['pricing'],
-    queryFn: getPricing,
+    queryKey: ['pricing', source],
+    queryFn: source === 'playground' ? getPlaygroundCatalog : getPricing,
     staleTime: 5 * 60 * 1000,
   })
 

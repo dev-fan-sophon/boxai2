@@ -29,3 +29,8 @@ export async function getPricing(): Promise<PricingData> {
   const res = await api.get('/api/pricing')
   return res.data
 }
+
+export async function getPlaygroundCatalog(): Promise<PricingData> {
+  const res = await api.get('/api/playground/catalog')
+  return res.data
+}

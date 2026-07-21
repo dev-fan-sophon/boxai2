@@ -32,35 +32,40 @@ type UsePlaygroundConversationOptions = {
     updater: Message[] | ((prev: Message[]) => Message[])
   ) => void
   sendChat: (messages: Message[]) => void
+  canSubmit: () => boolean
 }
 
 export function usePlaygroundConversation({
   messages,
   updateMessages,
   sendChat,
+  canSubmit,
 }: UsePlaygroundConversationOptions) {
   const [editingMessageKey, setEditingMessageKey] = useState<string | null>(
     null
   )
 
   const handleSendMessage = useCallback(
-    (text: string) => {
+    (text: string): boolean => {
+      if (!canSubmit()) return false
       const nextMessages = appendUserMessagePair(messages, text)
       updateMessages(nextMessages)
       sendChat(nextMessages)
+      return true
     },
-    [messages, updateMessages, sendChat]
+    [canSubmit, messages, updateMessages, sendChat]
   )
 
   const handleRegenerateMessage = useCallback(
     (message: Message) => {
+      if (!canSubmit()) return
       const nextMessages = createRegeneratedMessages(messages, message.key)
       if (!nextMessages) return
 
       updateMessages(nextMessages)
       sendChat(nextMessages)
     },
-    [messages, updateMessages, sendChat]
+    [canSubmit, messages, updateMessages, sendChat]
   )
 
   const handleEditMessage = useCallback((message: Message) => {
@@ -76,6 +81,7 @@ export function usePlaygroundConversation({
   const applyEdit = useCallback(
     (newContent: string, shouldSubmit: boolean) => {
       if (!editingMessageKey) return
+      if (shouldSubmit && !canSubmit()) return
 
       const editResult = applyMessageEdit(
         messages,
@@ -92,7 +98,7 @@ export function usePlaygroundConversation({
         sendChat(editResult.messages)
       }
     },
-    [editingMessageKey, messages, updateMessages, sendChat]
+    [canSubmit, editingMessageKey, messages, updateMessages, sendChat]
   )
 
   const handleDeleteMessage = useCallback(

@@ -33,6 +33,7 @@ type GenerationWorkspaceProps = {
   onGroupChange: (group: string) => void
   settings: StudioSettings
   onSettingsChange: (settings: StudioSettings) => void
+  canSubmit: () => boolean
   images: GeneratedImage[]
   video: VideoSubmission | null
   audioUrl: string
@@ -73,6 +74,7 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
   }
   const submit = () => {
     if (!prompt.trim() || !props.model) return
+    if (!props.canSubmit()) return
     const settings = normalizeSettings(props.settings)
     props.onSettingsChange(settings)
     const common = {

@@ -31,7 +31,9 @@ const videoActions = new Set<string>([
 ])
 
 type TaskHistoryProps = {
+  isAuthenticated: boolean
   highlightedTaskId?: string
+  onSignIn: () => void
 }
 
 export function TaskHistory(props: TaskHistoryProps) {
@@ -39,6 +41,7 @@ export function TaskHistory(props: TaskHistoryProps) {
   const query = useQuery({
     queryKey: ['playground', 'task-history'],
     queryFn: () => getUserTaskLogs({ p: 1, page_size: 20 }),
+    enabled: props.isAuthenticated,
     refetchInterval: (state) => {
       const items = (state.state.data?.data?.items ?? []) as TaskLog[]
       return items.some((item) =>
@@ -67,8 +70,14 @@ export function TaskHistory(props: TaskHistoryProps) {
           variant='ghost'
           size='icon'
           aria-label={t('Refresh tasks')}
-          onClick={() => query.refetch()}
-          disabled={query.isFetching}
+          onClick={() => {
+            if (props.isAuthenticated) {
+              query.refetch()
+            } else {
+              props.onSignIn()
+            }
+          }}
+          disabled={props.isAuthenticated && query.isFetching}
         >
           <RefreshCw
             className={cn('size-4', query.isFetching && 'animate-spin')}
@@ -76,96 +85,114 @@ export function TaskHistory(props: TaskHistoryProps) {
         </Button>
       </div>
       <div className='min-h-0 flex-1 space-y-2 overflow-y-auto p-2'>
-        {query.isLoading &&
+        {!props.isAuthenticated && (
+          <HistoryState
+            text={t('Please sign in to view {{module}}.', {
+              module: t('Task history'),
+            })}
+            action={t('Sign in now')}
+            onAction={props.onSignIn}
+          />
+        )}
+        {props.isAuthenticated &&
+          query.isLoading &&
           ['one', 'two', 'three', 'four'].map((key) => (
             <Skeleton key={key} className='h-24 w-full' />
           ))}
-        {query.isError && (
+        {props.isAuthenticated && query.isError && (
           <HistoryState
             text={t('Tasks could not be loaded.')}
             action={t('Try again')}
             onAction={() => query.refetch()}
           />
         )}
-        {!query.isLoading && !query.isError && tasks.length === 0 && (
-          <HistoryState
-            text={t('Your submitted media tasks will appear here.')}
-            action={t('Refresh')}
-            onAction={() => query.refetch()}
-          />
-        )}
-        {tasks.map((task) => {
-          const parsedPercent = Number.parseFloat(task.progress ?? '')
-          const percent = Number.isFinite(parsedPercent)
-            ? Math.min(100, Math.max(0, parsedPercent))
-            : null
-          const highlighted = props.highlightedTaskId === task.task_id
-          const canOpenVideo =
-            task.status === 'SUCCESS' &&
-            videoActions.has(task.action) &&
-            task.fail_reason?.startsWith('http')
-          return (
-            <article
-              key={task.id}
-              aria-current={highlighted ? 'true' : undefined}
-              className={cn(
-                'bg-background rounded-lg border p-3 transition-colors',
-                highlighted && 'border-primary/40 bg-primary/5'
-              )}
-            >
-              <div className='flex items-start justify-between gap-2'>
-                <span className='min-w-0 truncate text-sm font-medium'>
-                  {task.platform || task.action}
-                </span>
-                <StatusBadge
-                  label={t(taskStatusMapper.getLabel(task.status, task.status))}
-                  variant={taskStatusMapper.getVariant(task.status)}
-                  copyable={false}
-                  size='sm'
-                />
-              </div>
-              <p className='text-muted-foreground mt-1 truncate font-mono text-xs'>
-                {task.task_id}
-              </p>
-              <p className='text-muted-foreground/70 mt-1 text-[11px] tabular-nums'>
-                {formatTimestampToDate(task.submit_time, 'seconds')}
-              </p>
-              {percent !== null && percent > 0 && (
-                <Progress value={percent} className='mt-2 h-1.5' />
-              )}
-              {canOpenVideo && (
-                <a
-                  className='text-primary mt-2 inline-flex items-center gap-1 text-xs hover:underline'
-                  href={`/v1/videos/${task.task_id}/content`}
-                  target='_blank'
-                  rel='noreferrer'
-                >
-                  {t('Open result')}
-                  <ExternalLink className='size-3' />
-                </a>
-              )}
-              {task.fail_reason && (
-                <p className='text-destructive mt-2 line-clamp-2 text-xs text-pretty'>
-                  {task.fail_reason}
+        {props.isAuthenticated &&
+          !query.isLoading &&
+          !query.isError &&
+          tasks.length === 0 && (
+            <HistoryState
+              text={t('Your submitted media tasks will appear here.')}
+              action={t('Refresh')}
+              onAction={() => query.refetch()}
+            />
+          )}
+        {props.isAuthenticated &&
+          tasks.map((task) => {
+            const parsedPercent = Number.parseFloat(task.progress ?? '')
+            const percent = Number.isFinite(parsedPercent)
+              ? Math.min(100, Math.max(0, parsedPercent))
+              : null
+            const highlighted = props.highlightedTaskId === task.task_id
+            const canOpenVideo =
+              task.status === 'SUCCESS' &&
+              videoActions.has(task.action) &&
+              task.fail_reason?.startsWith('http')
+            return (
+              <article
+                key={task.id}
+                aria-current={highlighted ? 'true' : undefined}
+                className={cn(
+                  'bg-background rounded-lg border p-3 transition-colors',
+                  highlighted && 'border-primary/40 bg-primary/5'
+                )}
+              >
+                <div className='flex items-start justify-between gap-2'>
+                  <span className='min-w-0 truncate text-sm font-medium'>
+                    {task.platform || task.action}
+                  </span>
+                  <StatusBadge
+                    label={t(
+                      taskStatusMapper.getLabel(task.status, task.status)
+                    )}
+                    variant={taskStatusMapper.getVariant(task.status)}
+                    copyable={false}
+                    size='sm'
+                  />
+                </div>
+                <p className='text-muted-foreground mt-1 truncate font-mono text-xs'>
+                  {task.task_id}
                 </p>
-              )}
-            </article>
-          )
-        })}
+                <p className='text-muted-foreground/70 mt-1 text-[11px] tabular-nums'>
+                  {formatTimestampToDate(task.submit_time, 'seconds')}
+                </p>
+                {percent !== null && percent > 0 && (
+                  <Progress value={percent} className='mt-2 h-1.5' />
+                )}
+                {canOpenVideo && (
+                  <a
+                    className='text-primary mt-2 inline-flex items-center gap-1 text-xs hover:underline'
+                    href={`/v1/videos/${task.task_id}/content`}
+                    target='_blank'
+                    rel='noreferrer'
+                  >
+                    {t('Open result')}
+                    <ExternalLink className='size-3' />
+                  </a>
+                )}
+                {task.fail_reason && (
+                  <p className='text-destructive mt-2 line-clamp-2 text-xs text-pretty'>
+                    {task.fail_reason}
+                  </p>
+                )}
+              </article>
+            )
+          })}
       </div>
-      <div className='border-t p-2'>
-        <Button
-          render={
-            <Link to='/usage-logs/$section' params={{ section: 'task' }} />
-          }
-          variant='ghost'
-          size='sm'
-          className='w-full justify-start'
-        >
-          <ListTodo className='size-4' />
-          {t('View all task logs')}
-        </Button>
-      </div>
+      {props.isAuthenticated && (
+        <div className='border-t p-2'>
+          <Button
+            render={
+              <Link to='/usage-logs/$section' params={{ section: 'task' }} />
+            }
+            variant='ghost'
+            size='sm'
+            className='w-full justify-start'
+          >
+            <ListTodo className='size-4' />
+            {t('View all task logs')}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

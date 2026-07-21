@@ -51,6 +51,7 @@ import {
 const headerNavSchema = z.object({
   home: z.boolean(),
   console: z.boolean(),
+  playgroundEnabled: z.boolean(),
   pricingEnabled: z.boolean(),
   pricingRequireAuth: z.boolean(),
   rankingsEnabled: z.boolean(),
@@ -73,6 +74,10 @@ const toFormValues = (config: HeaderNavModulesConfig): HeaderNavFormValues => ({
     config.console === undefined
       ? HEADER_NAV_DEFAULT.console
       : Boolean(config.console),
+  playgroundEnabled:
+    config.playground?.enabled === undefined
+      ? HEADER_NAV_DEFAULT.playground.enabled
+      : Boolean(config.playground.enabled),
   pricingEnabled:
     config.pricing?.enabled === undefined
       ? HEADER_NAV_DEFAULT.pricing.enabled
@@ -121,6 +126,10 @@ export function HeaderNavigationSection({
       console: values.console,
       docs: values.docs,
       about: values.about,
+      playground: {
+        enabled: values.playgroundEnabled,
+        requireAuth: false,
+      },
       pricing: {
         ...(config.pricing ?? HEADER_NAV_DEFAULT.pricing),
         enabled: values.pricingEnabled,
@@ -162,6 +171,11 @@ export function HeaderNavigationSection({
       key: 'console',
       title: t('Console'),
       description: t('User dashboard and quota controls.'),
+    },
+    {
+      key: 'playgroundEnabled',
+      title: t('AI Aggregation Platform'),
+      description: t('Experiment with prompts and models in real time.'),
     },
     {
       key: 'docs',

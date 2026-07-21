@@ -54,10 +54,17 @@ if ! command -v go >/dev/null; then
   "${sudo_cmd[@]}" rm -rf /usr/local/go
   "${sudo_cmd[@]}" tar -C /usr/local -xzf "$setup_tmp/$go_archive"
   "${sudo_cmd[@]}" ln -sf /usr/local/go/bin/go /usr/local/bin/go
+  "${sudo_cmd[@]}" ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+  hash -r
+fi
+
+if ! command -v gofmt >/dev/null; then
+  "${sudo_cmd[@]}" ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
   hash -r
 fi
 
 go version
+gofmt --help >/dev/null
 
 node_supported=false
 if command -v node >/dev/null && node -e '

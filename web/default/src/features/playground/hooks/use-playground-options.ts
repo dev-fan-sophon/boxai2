@@ -31,6 +31,9 @@ import {
 import type { GroupOption, ModelOption, PlaygroundConfig } from '../types'
 
 type UsePlaygroundOptionsParams = {
+  isAuthenticated: boolean
+  publicGroups: GroupOption[]
+  publicModels: ModelOption[]
   currentGroup: string
   currentModel: string
   setGroups: (groups: GroupOption[]) => void
@@ -42,6 +45,9 @@ type UsePlaygroundOptionsParams = {
 }
 
 export function usePlaygroundOptions({
+  isAuthenticated,
+  publicGroups,
+  publicModels,
   currentGroup,
   currentModel,
   setGroups,
@@ -58,7 +64,7 @@ export function usePlaygroundOptions({
   } = useQuery({
     queryKey: ['playground-models', currentGroup],
     queryFn: () => getUserModels(currentGroup),
-    enabled: currentGroup !== '',
+    enabled: isAuthenticated && currentGroup !== '',
   })
 
   const {
@@ -68,6 +74,7 @@ export function usePlaygroundOptions({
   } = useQuery({
     queryKey: ['playground-groups'],
     queryFn: getUserGroups,
+    enabled: isAuthenticated,
   })
 
   useEffect(() => {
@@ -93,6 +100,35 @@ export function usePlaygroundOptions({
   }, [isGroupsError, groupsError, t])
 
   useEffect(() => {
+    if (isAuthenticated) return
+
+    setModels(publicModels)
+    const modelFallback = getModelFallback(publicModels, currentModel)
+    if (modelFallback) {
+      updateConfig('model', modelFallback)
+    } else if (
+      publicModels.length > 0 &&
+      shouldClearModelForGroup(publicModels, currentModel)
+    ) {
+      updateConfig('model', '')
+    }
+
+    setGroups(publicGroups)
+    const groupFallback = getGroupFallback(publicGroups, currentGroup)
+    if (groupFallback) updateConfig('group', groupFallback)
+  }, [
+    currentGroup,
+    currentModel,
+    isAuthenticated,
+    publicGroups,
+    publicModels,
+    setGroups,
+    setModels,
+    updateConfig,
+  ])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
     if (!modelsData) return
 
     setModels(modelsData)
@@ -106,10 +142,10 @@ export function usePlaygroundOptions({
     if (shouldClearModelForGroup(modelsData, currentModel)) {
       updateConfig('model', '')
     }
-  }, [modelsData, currentModel, setModels, updateConfig])
+  }, [isAuthenticated, modelsData, currentModel, setModels, updateConfig])
 
   useEffect(() => {
-    if (!groupsData) return
+    if (!isAuthenticated || !groupsData) return
 
     setGroups(groupsData)
     const fallback = getGroupFallback(groupsData, currentGroup)
@@ -117,9 +153,9 @@ export function usePlaygroundOptions({
     if (fallback) {
       updateConfig('group', fallback)
     }
-  }, [groupsData, currentGroup, setGroups, updateConfig])
+  }, [isAuthenticated, groupsData, currentGroup, setGroups, updateConfig])
 
   return {
-    isLoadingModels,
+    isLoadingModels: isAuthenticated && isLoadingModels,
   }
 }

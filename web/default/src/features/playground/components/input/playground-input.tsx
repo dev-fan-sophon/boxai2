@@ -38,7 +38,7 @@ import { PlaygroundInputTools } from './playground-input-tools'
 
 interface PlaygroundInputProps {
   config: PlaygroundConfig
-  onSubmit: (text: string) => void
+  onSubmit: (text: string) => boolean
   onStop?: () => void
   disabled?: boolean
   isGenerating?: boolean
@@ -88,8 +88,7 @@ export function PlaygroundInput({
     const submittableText = getSubmittableInputText(message, disabled)
 
     if (!submittableText) return
-    onSubmit(submittableText)
-    setText('')
+    if (onSubmit(submittableText)) setText('')
   }
 
   return (

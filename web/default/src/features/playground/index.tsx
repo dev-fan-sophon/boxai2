@@ -16,6 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useNavigate } from '@tanstack/react-router'
+import { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { Dialog } from '@/components/dialog'
+import { Button } from '@/components/ui/button'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { formatQuotaWithCurrency } from '@/lib/currency'
 import { useAuthStore } from '@/stores/auth-store'
@@ -36,9 +42,37 @@ import { useStudio } from './hooks/use-studio'
 import { getModelModality } from './lib/studio/model-modality'
 
 export function Playground() {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
   const user = useAuthStore((state) => state.auth.user)
-  const pricing = usePricingData()
+  const isAuthenticated = Boolean(user)
+  const [signInDialogOpen, setSignInDialogOpen] = useState(false)
+  const pricing = usePricingData('playground')
   const studio = useStudio()
+  const publicModels = useMemo(
+    () =>
+      pricing.models.map((model) => ({
+        label: model.model_name,
+        value: model.model_name,
+      })),
+    [pricing.models]
+  )
+  const publicGroups = useMemo(
+    () =>
+      Object.entries(pricing.usableGroup).map(([value, group]) => ({
+        value,
+        label: value,
+        desc: typeof group === 'string' ? group : group.desc,
+        ratio:
+          typeof group === 'string' ? pricing.groupRatio[value] : group.ratio,
+      })),
+    [pricing.groupRatio, pricing.usableGroup]
+  )
+  const requireAuthentication = useCallback((): boolean => {
+    if (user) return true
+    setSignInDialogOpen(true)
+    return false
+  }, [user])
   const {
     config,
     parameterEnabled,
@@ -72,6 +106,7 @@ export function Playground() {
     messages,
     updateMessages,
     sendChat,
+    canSubmit: requireAuthentication,
   })
 
   const handleClearMessages = () => {
@@ -80,6 +115,9 @@ export function Playground() {
   }
 
   const { isLoadingModels } = usePlaygroundOptions({
+    isAuthenticated,
+    publicGroups,
+    publicModels,
     currentGroup: config.group,
     currentModel: config.model,
     setGroups,
@@ -113,9 +151,18 @@ export function Playground() {
       modelName={config.model}
       modality={activeModality}
       group={config.group}
-      balance={formatQuotaWithCurrency(user?.quota ?? 0)}
+      balance={user ? formatQuotaWithCurrency(user.quota) : undefined}
+      onWalletClick={() => {
+        if (requireAuthentication()) navigate({ to: '/wallet' })
+      }}
       catalog={catalog}
-      history={<TaskHistory highlightedTaskId={studio.video?.taskId} />}
+      history={
+        <TaskHistory
+          isAuthenticated={isAuthenticated}
+          highlightedTaskId={studio.video?.taskId}
+          onSignIn={() => setSignInDialogOpen(true)}
+        />
+      }
     >
       {activeModality === 'chat' ? (
         <>
@@ -165,6 +212,7 @@ export function Playground() {
           onGroupChange={(value) => updateConfig('group', value)}
           settings={studio.settings}
           onSettingsChange={studio.setSettings}
+          canSubmit={requireAuthentication}
           images={studio.images}
           video={studio.video}
           audioUrl={studio.audioUrl}
@@ -173,6 +221,35 @@ export function Playground() {
           audioMutation={studio.audioMutation}
         />
       )}
+      <Dialog
+        open={signInDialogOpen}
+        onOpenChange={setSignInDialogOpen}
+        title={t('Sign in required')}
+        description={t('Please sign in to send requests with AI models.')}
+        contentClassName='sm:max-w-md'
+        footer={
+          <>
+            <Button
+              variant='outline'
+              onClick={() => setSignInDialogOpen(false)}
+            >
+              {t('Cancel')}
+            </Button>
+            <Button
+              onClick={() =>
+                navigate({
+                  to: '/sign-in',
+                  search: { redirect: '/playground' },
+                })
+              }
+            >
+              {t('Sign in now')}
+            </Button>
+          </>
+        }
+      >
+        <span />
+      </Dialog>
     </StudioShell>
   )
 }

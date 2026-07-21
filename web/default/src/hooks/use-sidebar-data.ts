@@ -26,7 +26,6 @@ import {
   Key,
   LayoutDashboard,
   ListTodo,
-  MessageSquare,
   Radio,
   ServerCog,
   Settings,
@@ -37,7 +36,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { type SidebarData } from '@/components/layout/types'
+import type { SidebarData } from '@/components/layout/types'
 import { ROLE } from '@/lib/roles'
 
 /**
@@ -62,7 +61,11 @@ export function useSidebarData(): SidebarData {
             title: t('Dashboard'),
             url: '/dashboard/overview',
             activeUrls: ['/dashboard'],
-            configUrls: ['/dashboard', '/dashboard/overview', '/dashboard/models'],
+            configUrls: [
+              '/dashboard',
+              '/dashboard/overview',
+              '/dashboard/models',
+            ],
             icon: LayoutDashboard,
           },
           {
@@ -86,14 +89,6 @@ export function useSidebarData(): SidebarData {
         id: 'tools',
         title: t('Tools'),
         items: [
-          // In-product playground is the primary "Chat" entry (Apilio keeps chat tools simple).
-          // External chat-presets remain available when admin enables chat.chat.
-          {
-            title: t('Chat'),
-            url: '/playground',
-            icon: MessageSquare,
-            configUrls: ['/playground'],
-          },
           {
             title: t('Chat apps'),
             icon: FlaskConical,

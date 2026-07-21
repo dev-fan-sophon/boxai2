@@ -43,14 +43,14 @@ export type TopNavLink = {
  *   about: false
  * }
  *
- * Default strip (Apilio-style): Home · Model Hub · Rankings · API Docs.
+ * Default strip: Home · AI Aggregation Platform · Model Hub · Rankings · API Docs.
  * About is off by default but appears when admin enables HeaderNavModules.about.
  * Console/Dashboard is a CTA in PublicHeader, not a strip text link.
  */
 export function useTopNavLinks(): TopNavLink[] {
   const { t } = useTranslation()
   const { status } = useStatus()
-  const { auth } = useAuthStore()
+  const user = useAuthStore((state) => state.auth.user)
 
   // Parse HeaderNavModules
   const modules = useMemo(() => {
@@ -62,15 +62,19 @@ export function useTopNavLinks(): TopNavLink[] {
   // Documentation link (may be external)
   const docsLink: string | undefined = status?.docs_link as string | undefined
 
-  const isAuthed = !!auth?.user
+  const isAuthed = !!user
 
   const links: TopNavLink[] = []
 
-  // Marketing strip order: Home · Model Hub · Rankings · API Docs · (About if enabled)
+  // Marketing strip order: Home · AI Aggregation Platform · Model Hub · Rankings · API Docs · (About if enabled)
   // Dashboard is rendered as a primary CTA button in PublicHeader, not here.
 
   if (modules?.home !== false) {
     links.push({ title: t('Home'), href: '/' })
+  }
+
+  if (modules.playground.enabled) {
+    links.push({ title: t('AI Aggregation Platform'), href: '/playground' })
   }
 
   const pricing = modules?.pricing

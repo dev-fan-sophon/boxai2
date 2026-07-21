@@ -24,6 +24,7 @@ export type HeaderNavAccessConfig = {
 export type HeaderNavModulesConfig = {
   home: boolean
   console: boolean
+  playground: HeaderNavAccessConfig
   pricing: HeaderNavAccessConfig
   rankings: HeaderNavAccessConfig
   docs: boolean
@@ -43,6 +44,10 @@ export type SidebarModulesAdminConfig = Record<string, SidebarSectionConfig>
 export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
   home: true,
   console: true,
+  playground: {
+    enabled: true,
+    requireAuth: false,
+  },
   pricing: {
     enabled: true,
     requireAuth: false,
@@ -58,7 +63,6 @@ export const HEADER_NAV_DEFAULT: HeaderNavModulesConfig = {
 export const SIDEBAR_MODULES_DEFAULT: SidebarModulesAdminConfig = {
   chat: {
     enabled: true,
-    playground: true,
     chat: true,
   },
   console: {
@@ -98,6 +102,7 @@ const toBoolean = (value: unknown, fallback: boolean): boolean => {
 
 const cloneHeaderNavDefault = (): HeaderNavModulesConfig => ({
   ...HEADER_NAV_DEFAULT,
+  playground: { ...HEADER_NAV_DEFAULT.playground },
   pricing: { ...HEADER_NAV_DEFAULT.pricing },
   rankings: { ...HEADER_NAV_DEFAULT.rankings },
 })
@@ -146,17 +151,21 @@ export function parseHeaderNavModules(
     const parsed = JSON.parse(value) as Record<string, unknown>
     const result: HeaderNavModulesConfig = {
       ...base,
+      playground: { ...base.playground },
       pricing: { ...base.pricing },
       rankings: { ...base.rankings },
     }
 
     Object.entries(parsed).forEach(([key, raw]) => {
-      if (key === 'pricing') {
-        result.pricing = parseAccessModule(raw, base.pricing)
+      if (key === 'playground') {
+        result.playground = {
+          ...parseAccessModule(raw, base.playground),
+          requireAuth: false,
+        }
         return
       }
-      if (key === 'rankings') {
-        result.rankings = parseAccessModule(raw, base.rankings)
+      if (key === 'pricing' || key === 'rankings') {
+        result[key] = parseAccessModule(raw, base[key])
         return
       }
 

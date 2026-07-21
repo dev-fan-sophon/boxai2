@@ -6,7 +6,6 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
-import { Link } from '@tanstack/react-router'
 import {
   ChevronLeft,
   ChevronRight,
@@ -44,7 +43,8 @@ type StudioShellProps = {
   modelName: string
   modality: StudioModality
   group: string
-  balance: string
+  balance?: string
+  onWalletClick: () => void
   catalog: React.ReactNode
   history: React.ReactNode
   children: React.ReactNode
@@ -143,17 +143,21 @@ export function StudioShell(props: StudioShellProps) {
           </div>
         </div>
         <div className='flex shrink-0 items-center gap-1 md:gap-2'>
-          <div className='hidden text-right sm:block'>
-            <p className='text-muted-foreground text-[11px]'>
-              {t('Available balance')}
-            </p>
-            <p className='text-sm font-medium tabular-nums'>{props.balance}</p>
-          </div>
+          {props.balance && (
+            <div className='hidden text-right sm:block'>
+              <p className='text-muted-foreground text-[11px]'>
+                {t('Available balance')}
+              </p>
+              <p className='text-sm font-medium tabular-nums'>
+                {props.balance}
+              </p>
+            </div>
+          )}
           <Button
-            render={<Link to='/wallet' />}
             variant='outline'
             size='sm'
             aria-label={t('Wallet')}
+            onClick={props.onWalletClick}
           >
             <WalletCards className='size-4' />
             <span className='hidden sm:inline'>{t('Wallet')}</span>

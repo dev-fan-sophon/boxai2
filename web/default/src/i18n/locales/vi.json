@@ -3566,6 +3566,7 @@
     "Please select items to delete": "Vui lòng chọn các mục để xóa",
     "Please Select user groups that can access this channel.": "Vui lòng chọn nhóm người dùng có thể truy cập kênh này.",
     "Please set Ollama API Base URL first": "Vui lòng đặt URL cơ sở API Ollama trước",
+    "Please sign in to send requests with AI models.": "Vui lòng đăng nhập để gửi yêu cầu đến các mô hình AI.",
     "Please sign in to view {{module}}.": "Vui lòng đăng nhập để xem {{module}}.",
     "Please try again later.": "Vui lòng thử lại sau.",
     "Please type the following text to confirm:": "Vui lòng nhập văn bản sau để xác nhận:",

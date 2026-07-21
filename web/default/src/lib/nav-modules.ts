@@ -20,11 +20,12 @@ import { getStatus } from '@/lib/api'
 
 export type ModuleAccess = { enabled: boolean; requireAuth: boolean }
 
-export type HeaderNavModule = 'rankings' | 'pricing'
+export type HeaderNavModule = 'playground' | 'rankings' | 'pricing'
 
 export type HeaderNavModules = {
   home: boolean
   console: boolean
+  playground: ModuleAccess
   pricing: ModuleAccess
   rankings: ModuleAccess
   docs: boolean
@@ -32,12 +33,14 @@ export type HeaderNavModules = {
   [key: string]: boolean | ModuleAccess
 }
 
-// Apilio-style public strip defaults:
-// Home · Model Hub · Rankings · API Docs (+ Dashboard CTA via console flag).
+// Public strip defaults:
+// Home · AI Aggregation Platform · Model Hub · Rankings · API Docs
+// (+ Dashboard CTA via console flag).
 // About is intentionally off by default — keep it in admin/footer paths only.
 const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
   home: true,
   console: true,
+  playground: { enabled: true, requireAuth: false },
   pricing: { enabled: true, requireAuth: false },
   rankings: { enabled: true, requireAuth: false },
   docs: true,
@@ -45,6 +48,7 @@ const DEFAULT_HEADER_NAV_MODULES: HeaderNavModules = {
 }
 
 const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {
+  playground: DEFAULT_HEADER_NAV_MODULES.playground,
   pricing: DEFAULT_HEADER_NAV_MODULES.pricing,
   rankings: DEFAULT_HEADER_NAV_MODULES.rankings,
 }
@@ -52,6 +56,7 @@ const DEFAULTS: Record<HeaderNavModule, ModuleAccess> = {
 function cloneHeaderNavDefaults(): HeaderNavModules {
   return {
     ...DEFAULT_HEADER_NAV_MODULES,
+    playground: { ...DEFAULT_HEADER_NAV_MODULES.playground },
     pricing: { ...DEFAULT_HEADER_NAV_MODULES.pricing },
     rankings: { ...DEFAULT_HEADER_NAV_MODULES.rankings },
   }
@@ -113,12 +118,15 @@ export function parseHeaderNavModules(raw: unknown): HeaderNavModules {
   if (!parsed) return result
 
   Object.entries(parsed).forEach(([key, value]) => {
-    if (key === 'pricing') {
-      result.pricing = parseAccess(value, result.pricing)
+    if (key === 'playground') {
+      result.playground = {
+        ...parseAccess(value, result.playground),
+        requireAuth: false,
+      }
       return
     }
-    if (key === 'rankings') {
-      result.rankings = parseAccess(value, result.rankings)
+    if (key === 'pricing' || key === 'rankings') {
+      result[key] = parseAccess(value, result[key])
       return
     }
 

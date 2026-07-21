@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TopNavLink } from '../types'
+import type { TopNavLink } from '../types'
 
 /**
  * Default top navigation links (Apilio-style marketing strip)
@@ -26,6 +26,7 @@ import { type TopNavLink } from '../types'
  */
 export const defaultTopNavLinks: TopNavLink[] = [
   { title: 'Home', href: '/' },
+  { title: 'AI Aggregation Platform', href: '/playground' },
   { title: 'Model Hub', href: '/pricing' },
   { title: 'Rankings', href: '/rankings' },
   { title: 'API Docs', href: '/about' },

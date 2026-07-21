@@ -18,23 +18,24 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
-import { Main } from '@/components/layout'
+import { PublicLayout } from '@/components/layout'
 import { Playground } from '@/features/playground'
-import { isSidebarModuleEnabled } from '@/lib/nav-modules'
+import { getFreshModuleAccess } from '@/lib/nav-modules'
 
-export const Route = createFileRoute('/_authenticated/playground/')({
-  beforeLoad: () => {
-    if (!isSidebarModuleEnabled('chat', 'playground')) {
-      throw redirect({ to: '/dashboard' })
-    }
+export const Route = createFileRoute('/playground/')({
+  beforeLoad: async () => {
+    const access = await getFreshModuleAccess('playground')
+    if (!access.enabled) throw redirect({ to: '/' })
   },
   component: PlaygroundPage,
 })
 
 function PlaygroundPage() {
   return (
-    <Main className='p-0'>
-      <Playground />
-    </Main>
+    <PublicLayout showMainContainer={false}>
+      <div className='h-svh overflow-hidden pt-16'>
+        <Playground />
+      </div>
+    </PublicLayout>
   )
 }
