@@ -34,6 +34,7 @@ import {
   isAssistantMessageFinal,
   isAssistantMessagePending,
 } from '../lib'
+import type { BuildChatPayloadOptions } from '../lib/streaming/payload-builder'
 import type { Message, PlaygroundConfig, ParameterEnabled } from '../types'
 import { useStreamRequest } from './use-stream-request'
 
@@ -41,6 +42,8 @@ interface UseChatHandlerOptions {
   config: PlaygroundConfig
   parameterEnabled: ParameterEnabled
   onMessageUpdate: (updater: (prev: Message[]) => Message[]) => void
+  /** Optional workbench chat tool preferences applied to request payload */
+  payloadOptions?: BuildChatPayloadOptions
 }
 
 const KNOWN_ERROR_MESSAGES = new Set<string>(Object.values(ERROR_MESSAGES))
@@ -69,6 +72,7 @@ export function useChatHandler({
   config,
   parameterEnabled,
   onMessageUpdate,
+  payloadOptions,
 }: UseChatHandlerOptions) {
   const { t } = useTranslation()
   const { sendStreamRequest, stopStream, isStreaming } = useStreamRequest()
@@ -208,7 +212,8 @@ export function useChatHandler({
       const payload = buildChatCompletionPayload(
         messages,
         config,
-        parameterEnabled
+        parameterEnabled,
+        payloadOptions
       )
       sendStreamRequest(
         payload,
@@ -220,6 +225,7 @@ export function useChatHandler({
     [
       config,
       parameterEnabled,
+      payloadOptions,
       sendStreamRequest,
       handleStreamUpdate,
       handleStreamComplete,
@@ -233,7 +239,8 @@ export function useChatHandler({
       const payload = buildChatCompletionPayload(
         messages,
         config,
-        parameterEnabled
+        parameterEnabled,
+        payloadOptions
       )
       const requestId = requestIdRef.current + 1
       const abortController = new AbortController()
@@ -276,7 +283,7 @@ export function useChatHandler({
         }
       }
     },
-    [config, parameterEnabled, onMessageUpdate, handleStreamError]
+    [config, parameterEnabled, payloadOptions, onMessageUpdate, handleStreamError]
   )
 
   // Send chat request (stream or non-stream based on config)

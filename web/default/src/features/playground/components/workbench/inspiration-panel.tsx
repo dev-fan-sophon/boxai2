@@ -1,0 +1,269 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+*/
+import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+
+import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
+
+import {
+  INSPIRATION_CATEGORIES,
+  INSPIRATION_TEMPLATES,
+  type InspirationTemplate,
+} from '../../lib/workbench/inspiration-data'
+import type {
+  InspirationWork,
+  RecentPrompt,
+} from '../../lib/workbench/workbench-prefs'
+import {
+  MODALITY_COLORS,
+  modalityLabelKey,
+} from '../../lib/workbench/modality-styles'
+import type { StudioModality } from '../../types'
+
+type InspirationView = 'square' | 'works' | 'usage'
+
+type InspirationPanelProps = {
+  variant?: 'rail' | 'main'
+  myWorks: InspirationWork[]
+  recentPrompts: RecentPrompt[]
+  onApplyTemplate: (template: InspirationTemplate) => void
+  onApplyPrompt: (prompt: string, modality: StudioModality) => void
+  onRemoveWork?: (id: string) => void
+  className?: string
+}
+
+export function InspirationPanel(props: InspirationPanelProps) {
+  const { t } = useTranslation()
+  const [view, setView] = useState<InspirationView>('square')
+  const [category, setCategory] = useState<string>('all')
+  const [modalityFilter, setModalityFilter] = useState<'all' | 'image' | 'video' | 'chat'>('all')
+  const variant = props.variant ?? 'rail'
+
+  const templates = useMemo(() => {
+    return INSPIRATION_TEMPLATES.filter((item) => {
+      if (category !== 'all' && item.category !== category) return false
+      if (modalityFilter !== 'all' && item.modality !== modalityFilter) {
+        return false
+      }
+      return true
+    })
+  }, [category, modalityFilter])
+
+  const body = (
+    <>
+      <div
+        className='flex gap-1 rounded-lg bg-white/[0.03] p-1 ring-1 ring-white/[0.06]'
+        role='tablist'
+        aria-label={t('Inspiration views')}
+      >
+        {(
+          [
+            ['square', 'Square'],
+            ['works', 'My works'],
+            ['usage', 'Usage'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type='button'
+            role='tab'
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={cn(
+              'flex-1 rounded-md px-2 py-1 text-[11px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50',
+              view === id
+                ? 'bg-cyan-500/15 text-cyan-300'
+                : 'text-zinc-500 hover:text-zinc-200'
+            )}
+          >
+            {t(label)}
+          </button>
+        ))}
+      </div>
+
+      {view === 'square' && (
+        <>
+          <div
+            className='flex flex-wrap gap-1'
+            role='group'
+            aria-label={t('Categories')}
+          >
+            {INSPIRATION_CATEGORIES.map((item) => (
+              <button
+                key={item.id}
+                type='button'
+                aria-pressed={category === item.id}
+                onClick={() => setCategory(item.id)}
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-[10px] outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50',
+                  category === item.id
+                    ? 'bg-white/10 text-zinc-100'
+                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-300'
+                )}
+              >
+                {t(item.labelKey)}
+              </button>
+            ))}
+          </div>
+          <div className='flex gap-1'>
+            {(['all', 'image', 'video', 'chat'] as const).map((item) => (
+              <button
+                key={item}
+                type='button'
+                aria-pressed={modalityFilter === item}
+                onClick={() => setModalityFilter(item)}
+                className={cn(
+                  'rounded-md px-2 py-0.5 text-[10px]',
+                  modalityFilter === item
+                    ? 'bg-cyan-500/15 text-cyan-300'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                )}
+              >
+                {t(item === 'all' ? 'All' : item[0].toUpperCase() + item.slice(1))}
+              </button>
+            ))}
+          </div>
+          <div
+            className={cn(
+              'grid gap-2',
+              variant === 'main' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'
+            )}
+          >
+            {templates.map((template) => (
+              <button
+                key={template.id}
+                type='button'
+                onClick={() => props.onApplyTemplate(template)}
+                className='rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-left outline-none transition hover:border-cyan-400/30 hover:bg-cyan-500/[0.04] focus-visible:ring-2 focus-visible:ring-cyan-400/50'
+              >
+                <div className='flex items-center justify-between gap-2'>
+                  <span className='truncate text-sm font-medium text-zinc-100'>
+                    {t(template.titleKey)}
+                  </span>
+                  <span
+                    className={cn(
+                      'shrink-0 rounded border px-1.5 py-0.5 text-[10px]',
+                      MODALITY_COLORS[template.modality as StudioModality]?.tag ??
+                        MODALITY_COLORS.chat.tag
+                    )}
+                  >
+                    {t(modalityLabelKey(template.modality as StudioModality))}
+                  </span>
+                </div>
+                <p className='mt-1.5 line-clamp-2 text-[11px] text-zinc-500'>
+                  {template.prompt}
+                </p>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {view === 'works' && (
+        <div className='space-y-2'>
+          {props.myWorks.length === 0 && (
+            <p className='py-8 text-center text-sm text-zinc-500'>
+              {t('Generations you save will show up here.')}
+            </p>
+          )}
+          {props.myWorks.map((work) => (
+            <div
+              key={work.id}
+              className='rounded-xl border border-white/[0.06] bg-white/[0.02] p-3'
+            >
+              <div className='flex items-start justify-between gap-2'>
+                <button
+                  type='button'
+                  className='min-w-0 text-left'
+                  onClick={() =>
+                    props.onApplyPrompt(work.prompt, work.modality)
+                  }
+                >
+                  <p className='truncate text-sm font-medium text-zinc-100'>
+                    {work.title}
+                  </p>
+                  <p className='mt-1 line-clamp-2 text-[11px] text-zinc-500'>
+                    {work.prompt}
+                  </p>
+                </button>
+                {props.onRemoveWork && (
+                  <Button
+                    size='sm'
+                    variant='ghost'
+                    className='h-7 text-xs text-zinc-500'
+                    onClick={() => props.onRemoveWork?.(work.id)}
+                  >
+                    {t('Remove')}
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {view === 'usage' && (
+        <div className='space-y-2'>
+          {props.recentPrompts.length === 0 && (
+            <p className='py-8 text-center text-sm text-zinc-500'>
+              {t('Recent prompts from this browser will appear here.')}
+            </p>
+          )}
+          {props.recentPrompts.map((item) => (
+            <button
+              key={item.id}
+              type='button'
+              onClick={() => props.onApplyPrompt(item.prompt, item.modality)}
+              className='w-full rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 text-left hover:border-cyan-400/30'
+            >
+              <p className='line-clamp-2 text-sm text-zinc-200'>{item.prompt}</p>
+              <p className='mt-1 font-mono text-[10px] text-zinc-500'>
+                {item.model} · {t(modalityLabelKey(item.modality))}
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  )
+
+  if (variant === 'main') {
+    return (
+      <div
+        className={cn(
+          'min-h-0 flex-1 space-y-4 overflow-y-auto p-4 md:p-8',
+          props.className
+        )}
+      >
+        <div>
+          <h1 className='text-2xl font-semibold text-zinc-50'>
+            {t('Inspiration')}
+          </h1>
+          <p className='mt-1 text-sm text-zinc-400'>
+            {t('Templates, saved works, and recent prompts for faster starts.')}
+          </p>
+        </div>
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <div className={cn('flex h-full min-h-0 flex-col', props.className)}>
+      <div className='border-b border-white/[0.06] p-3'>
+        <h2 className='text-sm font-semibold text-zinc-100'>
+          {t('Inspiration')}
+        </h2>
+        <p className='text-[11px] text-zinc-500'>{t('Templates & history')}</p>
+      </div>
+      <div className='min-h-0 flex-1 space-y-3 overflow-y-auto p-2'>{body}</div>
+    </div>
+  )
+}

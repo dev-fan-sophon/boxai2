@@ -17,12 +17,21 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import type {
+  ChatCompletionMessage,
   ChatCompletionRequest,
   Message,
   PlaygroundConfig,
   ParameterEnabled,
 } from '../../types'
 import { formatMessageForAPI, isValidMessage } from '../message/message-utils'
+import { clampSystemPrompt } from '../workbench/workbench-prefs'
+
+export type BuildChatPayloadOptions = {
+  /** Prepended as a system message when non-empty */
+  systemPrompt?: string
+  /** When false, only the latest user turn is sent (plus system prompt) */
+  carryHistory?: boolean
+}
 
 /**
  * Build API request payload from messages and config
@@ -30,12 +39,33 @@ import { formatMessageForAPI, isValidMessage } from '../message/message-utils'
 export function buildChatCompletionPayload(
   messages: Message[],
   config: PlaygroundConfig,
-  parameterEnabled: ParameterEnabled
+  parameterEnabled: ParameterEnabled,
+  options?: BuildChatPayloadOptions
 ): ChatCompletionRequest {
   // Filter and format valid messages
-  const processedMessages = messages
-    .filter(isValidMessage)
-    .map(formatMessageForAPI)
+  let sourceMessages = messages.filter(isValidMessage)
+  if (options?.carryHistory === false) {
+    // Keep the last user message only (and any trailing assistant is not needed for request)
+    const lastUserIndex = [...sourceMessages]
+      .map((message, index) => ({ message, index }))
+      .reverse()
+      .find((entry) => entry.message.from === 'user')?.index
+    sourceMessages =
+      lastUserIndex === undefined
+        ? []
+        : sourceMessages.slice(lastUserIndex, lastUserIndex + 1)
+  }
+
+  const processedMessages: ChatCompletionMessage[] =
+    sourceMessages.map(formatMessageForAPI)
+
+  const systemPrompt = clampSystemPrompt(options?.systemPrompt).trim()
+  if (systemPrompt) {
+    processedMessages.unshift({
+      role: 'system',
+      content: systemPrompt,
+    })
+  }
 
   const payload: ChatCompletionRequest = {
     model: config.model,

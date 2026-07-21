@@ -34,10 +34,14 @@ type TaskHistoryProps = {
   isAuthenticated: boolean
   highlightedTaskId?: string
   onSignIn: () => void
+  /** dark workbench sheet styling */
+  tone?: 'default' | 'workbench'
 }
 
 export function TaskHistory(props: TaskHistoryProps) {
   const { t } = useTranslation()
+  const tone = props.tone ?? 'default'
+  const isWb = tone === 'workbench'
   const query = useQuery({
     queryKey: ['playground', 'task-history'],
     queryFn: () => getUserTaskLogs({ p: 1, page_size: 20 }),
@@ -56,19 +60,40 @@ export function TaskHistory(props: TaskHistoryProps) {
   const tasks = (query.data?.data?.items ?? []) as TaskLog[]
 
   return (
-    <div className='bg-muted/20 flex h-full min-h-0 flex-col'>
-      <div className='flex items-center justify-between border-b p-3'>
+    <div
+      className={cn(
+        'flex h-full min-h-0 flex-col',
+        isWb ? 'bg-transparent' : 'bg-muted/20'
+      )}
+    >
+      <div
+        className={cn(
+          'flex items-center justify-between p-3',
+          isWb ? 'border-b border-white/[0.06]' : 'border-b'
+        )}
+      >
         <div>
-          <h2 className='text-sm font-semibold text-balance'>
+          <h2
+            className={cn(
+              'text-sm font-semibold text-balance',
+              isWb && 'text-zinc-100'
+            )}
+          >
             {t('Task history')}
           </h2>
-          <p className='text-muted-foreground text-xs text-pretty'>
+          <p
+            className={cn(
+              'text-xs text-pretty',
+              isWb ? 'text-zinc-500' : 'text-muted-foreground'
+            )}
+          >
             {t('Video and media tasks update automatically.')}
           </p>
         </div>
         <Button
           variant='ghost'
           size='icon'
+          className={isWb ? 'text-zinc-400 hover:bg-white/5 hover:text-white' : undefined}
           aria-label={t('Refresh tasks')}
           onClick={() => {
             if (props.isAuthenticated) {
@@ -92,18 +117,23 @@ export function TaskHistory(props: TaskHistoryProps) {
             })}
             action={t('Sign in now')}
             onAction={props.onSignIn}
+            workbench={isWb}
           />
         )}
         {props.isAuthenticated &&
           query.isLoading &&
           ['one', 'two', 'three', 'four'].map((key) => (
-            <Skeleton key={key} className='h-24 w-full' />
+            <Skeleton
+              key={key}
+              className={cn('h-24 w-full', isWb && 'bg-white/5')}
+            />
           ))}
         {props.isAuthenticated && query.isError && (
           <HistoryState
             text={t('Tasks could not be loaded.')}
             action={t('Try again')}
             onAction={() => query.refetch()}
+            workbench={isWb}
           />
         )}
         {props.isAuthenticated &&
@@ -114,6 +144,7 @@ export function TaskHistory(props: TaskHistoryProps) {
               text={t('Your submitted media tasks will appear here.')}
               action={t('Refresh')}
               onAction={() => query.refetch()}
+              workbench={isWb}
             />
           )}
         {props.isAuthenticated &&
@@ -132,12 +163,23 @@ export function TaskHistory(props: TaskHistoryProps) {
                 key={task.id}
                 aria-current={highlighted ? 'true' : undefined}
                 className={cn(
-                  'bg-background rounded-lg border p-3 transition-colors',
-                  highlighted && 'border-primary/40 bg-primary/5'
+                  'rounded-lg border p-3 transition-colors',
+                  isWb
+                    ? 'border-white/[0.06] bg-white/[0.03]'
+                    : 'bg-background border',
+                  highlighted &&
+                    (isWb
+                      ? 'border-cyan-400/40 bg-cyan-500/10'
+                      : 'border-primary/40 bg-primary/5')
                 )}
               >
                 <div className='flex items-start justify-between gap-2'>
-                  <span className='min-w-0 truncate text-sm font-medium'>
+                  <span
+                    className={cn(
+                      'min-w-0 truncate text-sm font-medium',
+                      isWb && 'text-zinc-100'
+                    )}
+                  >
                     {task.platform || task.action}
                   </span>
                   <StatusBadge
@@ -149,10 +191,20 @@ export function TaskHistory(props: TaskHistoryProps) {
                     size='sm'
                   />
                 </div>
-                <p className='text-muted-foreground mt-1 truncate font-mono text-xs'>
+                <p
+                  className={cn(
+                    'mt-1 truncate font-mono text-xs',
+                    isWb ? 'text-zinc-500' : 'text-muted-foreground'
+                  )}
+                >
                   {task.task_id}
                 </p>
-                <p className='text-muted-foreground/70 mt-1 text-[11px] tabular-nums'>
+                <p
+                  className={cn(
+                    'mt-1 text-[11px] tabular-nums',
+                    isWb ? 'text-zinc-600' : 'text-muted-foreground/70'
+                  )}
+                >
                   {formatTimestampToDate(task.submit_time, 'seconds')}
                 </p>
                 {percent !== null && percent > 0 && (
@@ -160,7 +212,10 @@ export function TaskHistory(props: TaskHistoryProps) {
                 )}
                 {canOpenVideo && (
                   <a
-                    className='text-primary mt-2 inline-flex items-center gap-1 text-xs hover:underline'
+                    className={cn(
+                      'mt-2 inline-flex items-center gap-1 text-xs hover:underline',
+                      isWb ? 'text-cyan-300' : 'text-primary'
+                    )}
                     href={`/v1/videos/${task.task_id}/content`}
                     target='_blank'
                     rel='noreferrer'
@@ -179,14 +234,22 @@ export function TaskHistory(props: TaskHistoryProps) {
           })}
       </div>
       {props.isAuthenticated && (
-        <div className='border-t p-2'>
+        <div
+          className={cn(
+            'p-2',
+            isWb ? 'border-t border-white/[0.06]' : 'border-t'
+          )}
+        >
           <Button
             render={
               <Link to='/usage-logs/$section' params={{ section: 'task' }} />
             }
             variant='ghost'
             size='sm'
-            className='w-full justify-start'
+            className={cn(
+              'w-full justify-start',
+              isWb && 'text-zinc-300 hover:bg-white/5 hover:text-white'
+            )}
           >
             <ListTodo className='size-4' />
             {t('View all task logs')}
@@ -201,11 +264,28 @@ function HistoryState(props: {
   text: string
   action: string
   onAction: () => void
+  workbench?: boolean
 }) {
   return (
     <div className='grid place-items-center gap-2 px-4 py-12 text-center'>
-      <p className='text-muted-foreground text-sm text-pretty'>{props.text}</p>
-      <Button size='sm' variant='outline' onClick={props.onAction}>
+      <p
+        className={cn(
+          'text-sm text-pretty',
+          props.workbench ? 'text-zinc-500' : 'text-muted-foreground'
+        )}
+      >
+        {props.text}
+      </p>
+      <Button
+        size='sm'
+        variant='outline'
+        className={
+          props.workbench
+            ? 'border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10'
+            : undefined
+        }
+        onClick={props.onAction}
+      >
         {props.action}
       </Button>
     </div>

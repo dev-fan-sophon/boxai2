@@ -6,11 +6,18 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
-import { AudioLines, Image, MessageSquare, Search, Video } from 'lucide-react'
+import {
+  AudioLines,
+  Image,
+  Layers,
+  MessageSquare,
+  Pin,
+  Search,
+  Video,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
@@ -19,15 +26,21 @@ import { cn } from '@/lib/utils'
 
 import type { PricingModel } from '../../../pricing/types'
 import { getModelModality } from '../../lib/studio/model-modality'
+import {
+  isLikelyNewModel,
+  modalityLabelKey,
+  MODALITY_COLORS,
+} from '../../lib/workbench/modality-styles'
 import type { ModelOption, StudioModality } from '../../types'
 import { ModelBrandIcon } from './model-brand-icon'
 
-const modalities: Array<'all' | StudioModality> = [
+const modalities: Array<'all' | StudioModality | 'mine'> = [
   'all',
   'chat',
   'image',
   'video',
   'audio',
+  'mine',
 ]
 
 const modalityIcons = {
@@ -45,13 +58,23 @@ type ModelCatalogProps = {
   error: boolean
   onRetry: () => void
   onSelect: (model: PricingModel) => void
+  pinnedModels?: string[]
+  onTogglePin?: (modelName: string) => void
+  duoEnabled?: boolean
+  onOpenDuo?: () => void
 }
 
 export function ModelCatalog(props: ModelCatalogProps) {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
-  const [modality, setModality] = useState<'all' | StudioModality>('all')
+  const [modality, setModality] = useState<'all' | StudioModality | 'mine'>(
+    'all'
+  )
   const [vendor, setVendor] = useState('all')
+  const pinnedSet = useMemo(
+    () => new Set(props.pinnedModels ?? []),
+    [props.pinnedModels]
+  )
   const availableNames = useMemo(
     () => new Set(props.available.map((item) => item.value)),
     [props.available]
@@ -69,39 +92,39 @@ export function ModelCatalog(props: ModelCatalogProps) {
   )
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
-    return catalog.filter((model) => {
+    const list = catalog.filter((model) => {
       const searchable =
         `${model.model_name} ${model.description ?? ''} ${model.vendor_name ?? ''}`.toLowerCase()
-      return (
-        searchable.includes(normalizedQuery) &&
-        (modality === 'all' || getModelModality(model) === modality) &&
-        (vendor === 'all' || model.vendor_name === vendor)
-      )
+      const modelModality = getModelModality(model)
+      if (!searchable.includes(normalizedQuery)) return false
+      if (vendor !== 'all' && model.vendor_name !== vendor) return false
+      if (modality === 'mine') return pinnedSet.has(model.model_name)
+      if (modality !== 'all' && modelModality !== modality) return false
+      return true
     })
-  }, [catalog, modality, query, vendor])
+    // Pinned models float to top within current filter
+    return list.sort((a, b) => {
+      const ap = pinnedSet.has(a.model_name) ? 0 : 1
+      const bp = pinnedSet.has(b.model_name) ? 0 : 1
+      if (ap !== bp) return ap - bp
+      return a.model_name.localeCompare(b.model_name)
+    })
+  }, [catalog, modality, pinnedSet, query, vendor])
 
   return (
-    <div className='bg-muted/20 flex h-full min-h-0 flex-col'>
-      <div className='space-y-3 border-b p-3'>
-        <div>
-          <h2 className='text-sm font-semibold text-balance'>
-            {t('Model catalog')}
-          </h2>
-          <p className='text-muted-foreground text-xs text-pretty'>
-            {t('Choose a model for your next run.')}
-          </p>
-        </div>
+    <div className='flex h-full min-h-0 flex-col bg-transparent'>
+      <div className='space-y-2.5 border-b border-white/[0.06] p-3'>
         <div className='relative'>
           <Search
             aria-hidden='true'
-            className='text-muted-foreground absolute top-2 left-2.5 size-4'
+            className='absolute top-2 left-2.5 size-3.5 text-zinc-500'
           />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={t('Search models')}
             aria-label={t('Search models')}
-            className='h-8 pl-8'
+            className='h-8 border-white/10 bg-white/[0.04] pl-8 text-zinc-100 placeholder:text-zinc-500 focus-visible:border-cyan-500/40 focus-visible:ring-cyan-500/20'
           />
         </div>
         <div
@@ -109,23 +132,30 @@ export function ModelCatalog(props: ModelCatalogProps) {
           role='group'
           aria-label={t('Filter by modality')}
         >
-          {modalities.map((item) => (
-            <Button
-              key={item}
-              size='sm'
-              variant={modality === item ? 'secondary' : 'ghost'}
-              className='h-7 px-2 text-xs'
-              onClick={() => setModality(item)}
-              aria-pressed={modality === item}
-            >
-              {t(
-                item === 'all' ? 'All' : item[0].toUpperCase() + item.slice(1)
-              )}
-            </Button>
-          ))}
+          {modalities.map((item) => {
+            let label = item[0].toUpperCase() + item.slice(1)
+            if (item === 'all') label = 'All'
+            if (item === 'mine') label = 'Mine'
+            return (
+              <button
+                key={item}
+                type='button'
+                className={cn(
+                  'h-7 rounded-lg px-2 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400/50',
+                  modality === item
+                    ? 'bg-cyan-500/15 text-cyan-300 ring-1 ring-cyan-400/30'
+                    : 'text-zinc-500 hover:bg-white/5 hover:text-zinc-200'
+                )}
+                onClick={() => setModality(item)}
+                aria-pressed={modality === item}
+              >
+                {t(label)}
+              </button>
+            )
+          })}
         </div>
         <NativeSelect
-          className='w-full'
+          className='w-full border-white/10 bg-white/[0.04] text-zinc-200'
           size='sm'
           value={vendor}
           onChange={(event) => setVendor(event.target.value)}
@@ -141,10 +171,39 @@ export function ModelCatalog(props: ModelCatalogProps) {
           ))}
         </NativeSelect>
       </div>
-      <div className='min-h-0 flex-1 space-y-1 overflow-y-auto p-2'>
+
+      <div className='min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2'>
+        {props.onOpenDuo && (
+          <button
+            type='button'
+            onClick={props.onOpenDuo}
+            className={cn(
+              'mb-1 flex w-full items-start gap-2.5 rounded-[11px] border border-dashed border-cyan-400/25 bg-cyan-500/[0.06] p-2.5 text-left outline-none transition-colors',
+              'hover:border-cyan-400/40 hover:bg-cyan-500/10 focus-visible:ring-2 focus-visible:ring-cyan-400/50',
+              props.duoEnabled &&
+                'border-solid border-cyan-400/40 shadow-[0_0_24px_-8px_rgba(0,202,224,0.55)]'
+            )}
+          >
+            <span className='flex size-9 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-300'>
+              <Layers className='size-4' aria-hidden='true' />
+            </span>
+            <span className='min-w-0'>
+              <span className='block text-xs font-semibold text-cyan-200'>
+                {t('Multi-model collaboration')}
+              </span>
+              <span className='mt-0.5 line-clamp-2 text-[11px] text-zinc-500'>
+                {t('Compare answers from several chat models, then summarize.')}
+              </span>
+            </span>
+          </button>
+        )}
+
         {props.loading &&
           ['one', 'two', 'three', 'four', 'five', 'six'].map((key) => (
-            <Skeleton key={key} className='h-20 w-full' />
+            <Skeleton
+              key={key}
+              className='h-[4.5rem] w-full rounded-[11px] bg-white/5'
+            />
           ))}
         {props.error && (
           <CatalogState
@@ -164,56 +223,100 @@ export function ModelCatalog(props: ModelCatalogProps) {
             }}
           />
         )}
-        <div className='space-y-1'>
+        <div className='space-y-1.5'>
           {filtered.map((model) => {
             const modelModality = getModelModality(model)
             const ModalityIcon = modalityIcons[modelModality]
             const selected = props.selected === model.model_name
+            const pinned = pinnedSet.has(model.model_name)
+            const isNew = isLikelyNewModel(model)
             return (
-              <button
-                type='button'
+              <div
                 key={model.model_name}
-                onClick={() => props.onSelect(model)}
-                aria-current={selected ? 'true' : undefined}
                 className={cn(
-                  'hover:bg-muted/70 focus-visible:ring-ring w-full rounded-lg border border-transparent p-2.5 text-left outline-none transition-colors focus-visible:ring-2',
-                  selected && 'border-primary/30 bg-primary/5 shadow-xs'
+                  'group relative w-full rounded-[11px] border border-transparent transition-all',
+                  selected
+                    ? 'border-cyan-400/30 bg-[rgba(0,202,224,0.08)] shadow-[0_0_28px_-10px_rgba(0,202,224,0.65)]'
+                    : 'hover:border-white/10 hover:bg-white/[0.03]'
                 )}
               >
-                <div className='flex items-start justify-between gap-2'>
-                  <span className='flex min-w-0 items-center gap-2'>
-                    <span className='bg-background flex size-9 shrink-0 items-center justify-center rounded-lg border shadow-xs'>
-                      <ModelBrandIcon
-                        modelName={model.model_name}
-                        icon={model.icon}
-                        vendorIcon={model.vendor_icon}
-                        size={22}
-                      />
-                    </span>
-                    <span className='min-w-0'>
-                      <span className='block truncate font-mono text-xs font-semibold'>
-                        {model.model_name}
+                <button
+                  type='button'
+                  onClick={() => props.onSelect(model)}
+                  aria-current={selected ? 'true' : undefined}
+                  className='w-full p-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50 focus-visible:ring-inset'
+                >
+                  <div className='flex items-start justify-between gap-2'>
+                    <span className='flex min-w-0 items-center gap-2'>
+                      <span className='flex size-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-black/30'>
+                        <ModelBrandIcon
+                          modelName={model.model_name}
+                          icon={model.icon}
+                          vendorIcon={model.vendor_icon}
+                          size={22}
+                        />
                       </span>
-                      <span className='text-muted-foreground mt-0.5 flex items-center gap-1 truncate text-[11px]'>
-                        <ModalityIcon className='size-3' aria-hidden='true' />
-                        {model.vendor_name ||
-                          t(
-                            modelModality[0].toUpperCase() +
-                              modelModality.slice(1)
+                      <span className='min-w-0'>
+                        <span className='flex items-center gap-1.5'>
+                          <span className='block truncate font-mono text-xs font-semibold text-zinc-100'>
+                            {model.model_name}
+                          </span>
+                          {isNew && (
+                            <span className='shrink-0 rounded bg-rose-500/20 px-1 py-px text-[9px] font-bold tracking-wide text-rose-300 ring-1 ring-rose-400/30'>
+                              {t('NEW')}
+                            </span>
                           )}
+                        </span>
+                        <span className='mt-0.5 flex items-center gap-1 truncate text-[11px] text-zinc-500'>
+                          <ModalityIcon
+                            className='size-3'
+                            aria-hidden='true'
+                          />
+                          {model.vendor_name ||
+                            t(modalityLabelKey(modelModality))}
+                        </span>
                       </span>
                     </span>
-                  </span>
-                  <Badge variant='outline' className='shrink-0 capitalize'>
-                    {t(modelModality[0].toUpperCase() + modelModality.slice(1))}
-                  </Badge>
-                </div>
-                <p className='text-muted-foreground mt-1 line-clamp-2 text-xs text-pretty'>
-                  {model.description ||
-                    model.vendor_description ||
-                    t('Available for generation')}
-                </p>
-              </button>
+                    <span
+                      className={cn(
+                        'shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium capitalize',
+                        MODALITY_COLORS[modelModality].tag
+                      )}
+                    >
+                      {t(modalityLabelKey(modelModality))}
+                    </span>
+                  </div>
+                  <p className='mt-1.5 line-clamp-2 text-[11px] text-pretty text-zinc-500'>
+                    {model.description ||
+                      model.vendor_description ||
+                      t('Available for generation')}
+                  </p>
+                </button>
+                {props.onTogglePin && (
+                  <button
+                    type='button'
+                    className={cn(
+                      'absolute top-2 right-2 rounded-md p-1 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50',
+                      pinned
+                        ? 'text-cyan-300'
+                        : 'text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-zinc-300'
+                    )}
+                    aria-label={
+                      pinned ? t('Unpin model') : t('Pin model')
+                    }
+                    aria-pressed={pinned}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      props.onTogglePin?.(model.model_name)
+                    }}
+                  >
+                    <Pin
+                      className={cn('size-3.5', pinned && 'fill-current')}
+                      aria-hidden='true'
+                    />
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>
@@ -229,8 +332,13 @@ function CatalogState(props: {
 }) {
   return (
     <div className='grid place-items-center gap-2 px-4 py-12 text-center'>
-      <p className='text-muted-foreground text-sm text-pretty'>{props.text}</p>
-      <Button size='sm' variant='outline' onClick={props.onAction}>
+      <p className='text-sm text-pretty text-zinc-500'>{props.text}</p>
+      <Button
+        size='sm'
+        variant='outline'
+        className='border-white/15 bg-white/5 text-zinc-200 hover:bg-white/10'
+        onClick={props.onAction}
+      >
         {props.action}
       </Button>
     </div>

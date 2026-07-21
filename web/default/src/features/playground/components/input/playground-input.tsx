@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -60,6 +60,9 @@ interface PlaygroundInputProps {
     value: boolean
   ) => void
   parameterEnabled: ParameterEnabled
+  /** External prompt prefill from inspiration / agents */
+  prefillText?: string
+  onPrefillConsumed?: () => void
 }
 
 export function PlaygroundInput({
@@ -80,9 +83,17 @@ export function PlaygroundInput({
   onClearMessages,
   onParameterEnabledChange,
   parameterEnabled,
+  prefillText,
+  onPrefillConsumed,
 }: PlaygroundInputProps) {
   const { t } = useTranslation()
   const [text, setText] = useState('')
+
+  useEffect(() => {
+    if (prefillText == null) return
+    setText(prefillText)
+    onPrefillConsumed?.()
+  }, [prefillText, onPrefillConsumed])
 
   const handleSubmit = (message: PromptInputMessage) => {
     const submittableText = getSubmittableInputText(message, disabled)

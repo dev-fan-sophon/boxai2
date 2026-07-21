@@ -1,0 +1,172 @@
+/*
+Copyright (C) 2023-2026 QuantumNous
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+*/
+import type { StudioModality } from '../../types'
+
+export type WorkbenchTab = 'models' | 'agents' | 'inspiration'
+
+export type WorkbenchChatTools = {
+  webSearch: boolean
+  carryHistory: boolean
+  longMemory: boolean
+  maxToolLoops: number
+  systemPrompt: string
+}
+
+export type DuoCollabState = {
+  enabled: boolean
+  answerModels: string[]
+  summaryModel: string
+}
+
+export type InspirationWork = {
+  id: string
+  title: string
+  modality: StudioModality
+  prompt: string
+  createdAt: number
+  model?: string
+  previewUrl?: string
+}
+
+export type RecentPrompt = {
+  id: string
+  prompt: string
+  modality: StudioModality
+  model: string
+  createdAt: number
+}
+
+export type WorkbenchPrefs = {
+  pinnedModels: string[]
+  chatTools: WorkbenchChatTools
+  duo: DuoCollabState
+  recentPrompts: RecentPrompt[]
+  myWorks: InspirationWork[]
+}
+
+export const DEFAULT_CHAT_TOOLS: WorkbenchChatTools = {
+  webSearch: false,
+  carryHistory: true,
+  longMemory: false,
+  maxToolLoops: 3,
+  systemPrompt: '',
+}
+
+export const DEFAULT_DUO: DuoCollabState = {
+  enabled: false,
+  answerModels: [],
+  summaryModel: '',
+}
+
+export const DEFAULT_WORKBENCH_PREFS: WorkbenchPrefs = {
+  pinnedModels: [],
+  chatTools: DEFAULT_CHAT_TOOLS,
+  duo: DEFAULT_DUO,
+  recentPrompts: [],
+  myWorks: [],
+}
+
+export const WORKBENCH_STORAGE_KEY = 'playground_workbench_prefs_v1'
+export const MAX_PINNED_MODELS = 40
+export const MAX_RECENT_PROMPTS = 40
+export const MAX_MY_WORKS = 60
+export const MAX_SYSTEM_PROMPT_CHARS = 8000
+
+export function clampSystemPrompt(value: string | undefined | null): string {
+  if (typeof value !== 'string') return ''
+  return value.slice(0, MAX_SYSTEM_PROMPT_CHARS)
+}
+
+export function normalizeChatTools(
+  value: Partial<WorkbenchChatTools> | undefined | null
+): WorkbenchChatTools {
+  return {
+    webSearch: value?.webSearch === true,
+    carryHistory: value?.carryHistory !== false,
+    longMemory: value?.longMemory === true,
+    maxToolLoops: clampInt(value?.maxToolLoops, 1, 20, 3),
+    systemPrompt: clampSystemPrompt(value?.systemPrompt),
+  }
+}
+
+export function loadWorkbenchPrefs(): WorkbenchPrefs {
+  try {
+    const raw = localStorage.getItem(WORKBENCH_STORAGE_KEY)
+    if (!raw) return structuredClone(DEFAULT_WORKBENCH_PREFS)
+    const parsed = JSON.parse(raw) as Partial<WorkbenchPrefs>
+    return {
+      pinnedModels: Array.isArray(parsed.pinnedModels)
+        ? parsed.pinnedModels.filter((item): item is string => typeof item === 'string').slice(0, MAX_PINNED_MODELS)
+        : [],
+      chatTools: normalizeChatTools(parsed.chatTools),
+      duo: {
+        ...DEFAULT_DUO,
+        ...parsed.duo,
+        enabled: parsed.duo?.enabled === true,
+        answerModels: Array.isArray(parsed.duo?.answerModels)
+          ? parsed.duo.answerModels.filter((item): item is string => typeof item === 'string').slice(0, 5)
+          : [],
+        summaryModel:
+          typeof parsed.duo?.summaryModel === 'string' ? parsed.duo.summaryModel : '',
+      },
+      recentPrompts: Array.isArray(parsed.recentPrompts)
+        ? parsed.recentPrompts
+            .filter(isRecentPrompt)
+            .slice(0, MAX_RECENT_PROMPTS)
+        : [],
+      myWorks: Array.isArray(parsed.myWorks)
+        ? parsed.myWorks.filter(isInspirationWork).slice(0, MAX_MY_WORKS)
+        : [],
+    }
+  } catch {
+    return structuredClone(DEFAULT_WORKBENCH_PREFS)
+  }
+}
+
+export function saveWorkbenchPrefs(prefs: WorkbenchPrefs): void {
+  try {
+    localStorage.setItem(WORKBENCH_STORAGE_KEY, JSON.stringify(prefs))
+  } catch {
+    // Storage may be unavailable.
+  }
+}
+
+function clampInt(
+  value: number | undefined,
+  min: number,
+  max: number,
+  fallback: number
+): number {
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, Math.round(value as number)))
+}
+
+function isRecentPrompt(value: unknown): value is RecentPrompt {
+  if (!value || typeof value !== 'object') return false
+  const item = value as RecentPrompt
+  return (
+    typeof item.id === 'string' &&
+    typeof item.prompt === 'string' &&
+    typeof item.modality === 'string' &&
+    typeof item.model === 'string' &&
+    typeof item.createdAt === 'number'
+  )
+}
+
+function isInspirationWork(value: unknown): value is InspirationWork {
+  if (!value || typeof value !== 'object') return false
+  const item = value as InspirationWork
+  return (
+    typeof item.id === 'string' &&
+    typeof item.title === 'string' &&
+    typeof item.modality === 'string' &&
+    typeof item.prompt === 'string' &&
+    typeof item.createdAt === 'number'
+  )
+}
