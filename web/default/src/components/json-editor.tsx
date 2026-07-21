@@ -65,7 +65,9 @@ function isJsonObject(json: string): boolean {
   if (!json.trim()) return true
   try {
     const parsed = JSON.parse(json)
-    return Boolean(parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+    return Boolean(
+      parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    )
   } catch {
     return false
   }

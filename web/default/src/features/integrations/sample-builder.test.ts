@@ -128,7 +128,7 @@ describe('buildIntegrationSample', () => {
       'javascript',
       gateway
     )
-    expect(javascript).toContain("openAsBlob(\"audio.mp3\")")
+    expect(javascript).toContain('openAsBlob("audio.mp3")')
     expect(javascript).toContain('form.append("file", file, "audio.mp3")')
   })
 
@@ -162,7 +162,7 @@ describe('buildIntegrationSample', () => {
     const curl = buildIntegrationSample(speech, 'tts', 'curl', gateway)
     expect(curl).toContain("}' \\\n  --output speech.mp3")
     expect(buildIntegrationSample(speech, 'tts', 'python', gateway)).toContain(
-      "write_bytes(response.content)"
+      'write_bytes(response.content)'
     )
     const javascript = buildIntegrationSample(
       speech,

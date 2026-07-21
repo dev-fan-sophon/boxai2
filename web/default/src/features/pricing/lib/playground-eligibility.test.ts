@@ -8,8 +8,8 @@ License, or (at your option) any later version.
 */
 import { describe, expect, it } from 'vitest'
 
-import type { PricingModel } from '../types'
 import { getModelModality } from '../../playground/lib/studio/model-modality'
+import type { PricingModel } from '../types'
 import { canTryInPlayground } from './playground-eligibility'
 
 const model = { model_name: 'test' } as PricingModel
