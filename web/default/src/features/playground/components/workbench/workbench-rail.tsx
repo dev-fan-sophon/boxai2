@@ -6,10 +6,9 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
-import { Bot, Lightbulb, Sparkles, WalletCards } from 'lucide-react'
+import { Bot, Lightbulb, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 import type { WorkbenchTab } from '../../lib/workbench/workbench-prefs'
@@ -17,8 +16,6 @@ import type { WorkbenchTab } from '../../lib/workbench/workbench-prefs'
 type WorkbenchRailProps = {
   tab: WorkbenchTab
   onTabChange: (tab: WorkbenchTab) => void
-  balance?: string
-  onWalletClick: () => void
   catalog: React.ReactNode
   agents: React.ReactNode
   inspiration: React.ReactNode
@@ -39,21 +36,7 @@ export function WorkbenchRail(props: WorkbenchRailProps) {
 
   return (
     <div className='flex h-full min-h-0 flex-col'>
-      <div className='shrink-0 space-y-3 border-b border-white/[0.06] p-3'>
-        <div className='flex items-center gap-2.5 px-0.5'>
-          <span className='flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400/30 to-cyan-600/10 ring-1 ring-cyan-400/30'>
-            <Sparkles className='size-4 text-cyan-300' aria-hidden='true' />
-          </span>
-          <div className='min-w-0'>
-            <p className='truncate text-sm font-semibold tracking-tight text-zinc-50'>
-              Box AI
-            </p>
-            <p className='truncate text-[11px] text-zinc-500'>
-              {t('AI model workbench')}
-            </p>
-          </div>
-        </div>
-
+      <div className='shrink-0 border-b border-white/[0.06] p-3'>
         <div
           className='grid grid-cols-3 gap-1 rounded-xl bg-white/[0.03] p-1 ring-1 ring-white/[0.06]'
           role='tablist'
@@ -88,31 +71,6 @@ export function WorkbenchRail(props: WorkbenchRailProps) {
         {props.tab === 'models' && props.catalog}
         {props.tab === 'agents' && props.agents}
         {props.tab === 'inspiration' && props.inspiration}
-      </div>
-
-      <div className='shrink-0 border-t border-white/[0.06] p-2.5'>
-        <div className='flex items-center gap-2 rounded-xl bg-white/[0.03] p-2 ring-1 ring-white/[0.06]'>
-          <div className='flex size-8 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-xs font-semibold text-zinc-300'>
-            AI
-          </div>
-          <div className='min-w-0 flex-1'>
-            <p className='truncate text-[11px] text-zinc-500'>
-              {t('Available balance')}
-            </p>
-            <p className='truncate text-xs font-medium tabular-nums text-zinc-100'>
-              {props.balance ?? t('Sign in to view balance')}
-            </p>
-          </div>
-          <Button
-            size='sm'
-            className='h-7 shrink-0 rounded-lg bg-cyan-500/90 px-2.5 text-xs font-semibold text-zinc-950 hover:bg-cyan-400'
-            onClick={props.onWalletClick}
-            aria-label={t('Top up')}
-          >
-            <WalletCards className='size-3.5' />
-            <span className='ml-1'>{t('Top up')}</span>
-          </Button>
-        </div>
       </div>
     </div>
   )

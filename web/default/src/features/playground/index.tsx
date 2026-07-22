@@ -26,17 +26,14 @@ import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { canTryInPlayground } from '@/features/pricing/lib/playground-eligibility'
-import { formatQuotaWithCurrency } from '@/lib/currency'
 import { useAuthStore } from '@/stores/auth-store'
 
 import { PlaygroundChat } from './components/chat/playground-chat'
 import { PlaygroundInput } from './components/input/playground-input'
 import { GenerationWorkspace } from './components/studio/generation-workspace'
 import { ModelCatalog } from './components/studio/model-catalog'
-import { TaskHistory } from './components/studio/task-history'
 import { AgentsPanel } from './components/workbench/agents-panel'
 import { ChatAdvancedTools } from './components/workbench/chat-advanced-tools'
-import { ChatHistoryPanel } from './components/workbench/chat-history-panel'
 import { DuoWorkspace } from './components/workbench/duo-workspace'
 import { InspirationPanel } from './components/workbench/inspiration-panel'
 import { WorkbenchShell } from './components/workbench/workbench-shell'
@@ -65,9 +62,6 @@ export function Playground() {
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>('models')
   const [duoOpen, setDuoOpen] = useState(false)
   const [prefillPrompt, setPrefillPrompt] = useState<string | undefined>()
-  const [activeConversationId, setActiveConversationId] = useState<
-    number | null
-  >(null)
   const pricing = usePricingData('playground')
   const playgroundModels = useMemo(
     () =>
@@ -311,30 +305,6 @@ export function Playground() {
     />
   )
 
-  const history =
-    activeModality === 'chat' ? (
-      <ChatHistoryPanel
-        messages={messages}
-        onClear={handleClearMessages}
-        isAuthenticated={isAuthenticated}
-        activeConversationId={activeConversationId}
-        onConversationIdChange={setActiveConversationId}
-        onLoadMessages={(loaded) => updateMessages(loaded)}
-        model={config.model}
-        group={config.group}
-      />
-    ) : (
-      <TaskHistory
-        isAuthenticated={isAuthenticated}
-        highlightedTaskId={studio.video?.taskId}
-        onSignIn={() => setSignInDialogOpen(true)}
-        tone='workbench'
-      />
-    )
-
-  const historyLabel =
-    activeModality === 'chat' ? t('Chat history') : t('Task list')
-
   const showModelsWorkspace = workbenchTab === 'models'
 
   return (
@@ -343,10 +313,6 @@ export function Playground() {
       onTabChange={(tab) => {
         setWorkbenchTab(tab)
         if (tab !== 'models') setDuoOpen(false)
-      }}
-      balance={user ? formatQuotaWithCurrency(user.quota) : undefined}
-      onWalletClick={() => {
-        if (requireAuthentication()) navigate({ to: '/wallet' })
       }}
       catalog={catalog}
       agents={
@@ -362,9 +328,6 @@ export function Playground() {
           onRemoveWork={workbench.removeWork}
         />
       }
-      history={history}
-      historyTriggerLabel={historyLabel}
-      showHistoryTrigger={showModelsWorkspace}
     >
       {showBusyStrip && (
         <div className='flex shrink-0 items-center justify-between gap-3 border-b border-amber-400/20 bg-amber-400/10 px-3 py-2'>
