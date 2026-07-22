@@ -43,9 +43,10 @@ type PlaygroundMessage struct {
 	ConversationId int    `json:"conversation_id" gorm:"not null;index"`
 	UserId         int    `json:"user_id" gorm:"not null;index"`
 	Role           string `json:"role" gorm:"type:varchar(32);not null"` // user | assistant | system
-	// longtext: MySQL TEXT is 64KB; cloud chat sync allows large messages.
-	// SQLite/PostgreSQL map this to unlimited TEXT affinity.
-	Content string `json:"content" gorm:"type:longtext"`
+	// type:text is portable across SQLite / MySQL / PostgreSQL.
+	// (MySQL TEXT is 64KB; large messages are also capped in the API layer.)
+	// Do NOT use longtext — PostgreSQL rejects it (SQLSTATE 42704).
+	Content string `json:"content" gorm:"type:text"`
 	Seq            int    `json:"seq" gorm:"not null;index"`
 	CreatedAt      int64  `json:"created_at" gorm:"bigint"`
 }
