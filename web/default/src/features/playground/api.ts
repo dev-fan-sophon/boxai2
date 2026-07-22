@@ -451,6 +451,7 @@ export type PlaygroundRun = {
   model: string
   prompt: string
   result_url: string
+  asset_id?: number
   quota: number
   task_id: string
   created_at: number

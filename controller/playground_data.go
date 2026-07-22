@@ -700,6 +700,22 @@ func CreatePlaygroundRun(c *gin.Context) {
 	}
 	prompt := truncateRunes(body.Prompt, 4000)
 	resultURL := allowlistedResultURL(body.ResultURL)
+	assetId := 0
+	// Persist synchronous image/audio outputs to durable storage so they
+	// survive provider URL expiry. Video results arrive asynchronously and are
+	// persisted from task polling instead.
+	if mod == "image" || mod == "audio" {
+		if asset, err := service.PersistPlaygroundOutput(c.Request.Context(), userId, mod, body.ResultURL); err != nil {
+			common.SysError("persist playground output: " + err.Error())
+		} else if asset != nil {
+			asset.URL = playgroundAssetContentURL(asset.Id)
+			if err := model.DB.Model(asset).Update("url", asset.URL).Error; err != nil {
+				common.SysError("update playground asset url: " + err.Error())
+			}
+			resultURL = asset.URL
+			assetId = asset.Id
+		}
+	}
 	if len(resultURL) > 1000 {
 		resultURL = resultURL[:1000]
 	}
@@ -710,6 +726,7 @@ func CreatePlaygroundRun(c *gin.Context) {
 	run := &model.PlaygroundRun{
 		UserId:    userId,
 		Modality:  mod,
+		AssetId:   assetId,
 		Model:     body.Model,
 		Prompt:    prompt,
 		ResultURL: resultURL,

@@ -77,6 +77,7 @@ type PlaygroundRun struct {
 	Model     string `json:"model" gorm:"type:varchar(191)"`
 	Prompt    string `json:"prompt" gorm:"type:text"`
 	ResultURL string `json:"result_url" gorm:"type:varchar(1024)"`
+	AssetId   int    `json:"asset_id" gorm:"index"` // persisted output asset, when stored
 	Quota     int    `json:"quota"`
 	TaskId    string `json:"task_id" gorm:"type:varchar(191);index"`
 	CreatedAt int64  `json:"created_at" gorm:"bigint;index"`
