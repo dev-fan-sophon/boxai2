@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import type { PricingModel } from '@/features/pricing/types'
 
+import { useVideoTaskResult } from '../../hooks/use-video-task-result'
 import type {
   GeneratedImage,
   GroupOption,
@@ -104,6 +105,11 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
     setReference(null)
   }, [props.modality, props.model])
 
+  const videoTask = useVideoTaskResult(
+    props.video?.taskId,
+    props.modality === 'video' && Boolean(props.video)
+  )
+
   let isPending = props.audioMutation.isPending
   let error = props.audioMutation.error
   if (props.modality === 'image') {
@@ -192,10 +198,7 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
     <div className='relative flex min-h-0 flex-1 flex-col overflow-hidden'>
       <div className='min-h-0 flex-1 overflow-y-auto pb-40'>
         {!hasOutput && !isPending && !error && (
-          <ModelHero
-            model={props.pricingModel}
-            modelName={props.model}
-          />
+          <ModelHero model={props.pricingModel} modelName={props.model} />
         )}
 
         <div className='mx-auto w-full max-w-5xl px-4 pb-6 md:px-6'>
@@ -209,7 +212,7 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                 {props.images.map((image) => (
                   <figure
                     key={image.url}
-                    className='overflow-hidden rounded-xl border border-border bg-muted/60'
+                    className='border-border bg-muted/60 overflow-hidden rounded-xl border'
                   >
                     <img
                       src={image.url}
@@ -217,7 +220,7 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                       className='aspect-square w-full object-cover'
                     />
                     {image.revisedPrompt && (
-                      <figcaption className='p-2 text-xs text-pretty text-muted-foreground'>
+                      <figcaption className='text-muted-foreground p-2 text-xs text-pretty'>
                         {image.revisedPrompt}
                       </figcaption>
                     )}
@@ -225,23 +228,71 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                 ))}
               </div>
             )}
-            {props.modality === 'video' && props.video && (
-              <div className='rounded-2xl border border-border bg-muted/40 p-6 text-center'>
-                <p className='font-medium text-foreground'>
-                  {t('Video task submitted')}
-                </p>
-                <p className='mt-1 font-mono text-xs text-muted-foreground'>
-                  {props.video.taskId}
-                </p>
-                <p className='mt-2 text-sm text-pretty text-muted-foreground'>
-                  {t(
-                    'Track progress in task history. The result link appears when processing finishes.'
+            {props.modality === 'video' && props.video && videoTask.ready && (
+              <div className='mx-auto w-full max-w-3xl space-y-3'>
+                <video
+                  controls
+                  className='border-border w-full rounded-2xl border bg-black'
+                  src={videoTask.resultUrl}
+                >
+                  {t('Your browser does not support video playback.')}
+                </video>
+                <Button
+                  render={
+                    <a
+                      href={videoTask.resultUrl}
+                      download={`video-${props.video.taskId}.mp4`}
+                    />
+                  }
+                  variant='outline'
+                  size='sm'
+                  className='border-border bg-muted/50 text-foreground'
+                >
+                  <Download className='size-4' />
+                  {t('Download video')}
+                </Button>
+              </div>
+            )}
+            {props.modality === 'video' &&
+              props.video &&
+              !videoTask.ready &&
+              !videoTask.failed && (
+                <div className='border-border bg-muted/40 rounded-2xl border p-6 text-center'>
+                  <p className='text-foreground font-medium'>
+                    {t('Video task submitted')}
+                  </p>
+                  <p className='text-muted-foreground mt-1 font-mono text-xs'>
+                    {props.video.taskId}
+                  </p>
+                  <p className='text-muted-foreground mt-2 text-sm text-pretty'>
+                    {t(
+                      'Rendering your video. It will play here automatically when ready.'
+                    )}
+                  </p>
+                  {videoTask.percent !== null && videoTask.percent > 0 && (
+                    <div className='bg-muted mx-auto mt-4 h-1.5 w-full max-w-sm overflow-hidden rounded-full'>
+                      <div
+                        className='bg-primary h-full rounded-full transition-all'
+                        style={{ width: `${videoTask.percent}%` }}
+                      />
+                    </div>
                   )}
+                </div>
+              )}
+            {props.modality === 'video' && props.video && videoTask.failed && (
+              <div className='border-destructive/40 bg-destructive/5 rounded-2xl border p-6 text-center'>
+                <p className='text-foreground font-medium'>
+                  {t('Video generation failed.')}
                 </p>
+                {videoTask.failReason && (
+                  <p className='text-destructive mt-2 text-xs text-pretty'>
+                    {videoTask.failReason}
+                  </p>
+                )}
               </div>
             )}
             {props.modality === 'audio' && props.audioUrl && (
-              <div className='mx-auto w-full max-w-md space-y-3 rounded-2xl border border-border bg-muted/40 p-5'>
+              <div className='border-border bg-muted/40 mx-auto w-full max-w-md space-y-3 rounded-2xl border p-5'>
                 <audio controls className='w-full' src={props.audioUrl}>
                   {t('Your browser does not support audio playback.')}
                 </audio>
@@ -262,8 +313,8 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
               </div>
             )}
             {isPending && (
-              <div className='flex items-center justify-center gap-2 py-16 text-sm text-muted-foreground'>
-                <Loader2 className='size-4 animate-spin text-primary' />
+              <div className='text-muted-foreground flex items-center justify-center gap-2 py-16 text-sm'>
+                <Loader2 className='text-primary size-4 animate-spin' />
                 {t('Generating…')}
               </div>
             )}
@@ -273,7 +324,7 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                   {error.message || t('Generation failed.')}
                 </p>
                 <Button
-                  className='mt-3 border-border bg-muted/50 text-foreground'
+                  className='border-border bg-muted/50 text-foreground mt-3'
                   size='sm'
                   variant='outline'
                   onClick={submit}
