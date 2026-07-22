@@ -138,13 +138,14 @@ Do NOT directly import or call `encoding/json` in business code. `json.RawMessag
 
 ### Deployment (BoxAI production & local)
 
-**Canonical docs:** `deploy/README.md`. Do not reintroduce full-stack application Docker as the primary production path.
+**Canonical docs:** `deploy/README.md`. Environment variable map: `docs/environment.md`. Do not reintroduce full-stack application Docker as the primary production path.
 
 | Layer | Production | Local default |
 |-------|------------|---------------|
 | App (Go + embedded web) | Host binary + **systemd** `boxai.service` on `127.0.0.1:3000` | Optional `go run` / `make start-api` |
 | Postgres / Redis | Docker only (`deploy/docker-compose.infra.yml`) on `127.0.0.1:5432` / `6379` | Optional `docker-compose.dev.yml` (infra only) |
 | TLS / reverse proxy | nginx → `127.0.0.1:3000` | n/a |
+| Edge / CDN / DNS / Workers / R2 / CF Email | Cloudflare **小 QQ** account (`you-box.com`) | Same account via `.env.cloudflare` |
 
 **Commands agents must prefer:**
 
@@ -171,6 +172,41 @@ make dev-web-local
 **Canonical name:** `boxai` only (repo `dev-fan-sophon/boxai`, unit `boxai.service`, root `/opt/boxai`). Do not use `boxai2` for new work.
 
 **Ops paths on the server:** `/opt/boxai/` (`bin/new-api`, `current` → `releases/<id>`, `.env`, `docker-compose.infra.yml`, `logs/`, `data/`). Health: `curl -fsS http://127.0.0.1:3000/api/status` and `systemctl status boxai`.
+
+### Environment files (agents & Amp orb)
+
+**Canonical map:** [`docs/environment.md`](docs/environment.md). Examples (committed, no secrets): `.env.boxai-admin.example`, `.env.cloudflare.example`. Real values are gitignored.
+
+| Local file (gitignored) | Amp orb Settings | Purpose |
+|-------------------------|------------------|---------|
+| `.env.boxai-admin` | `BOXAI_*` | Management API + production SSH (`boxai-api` / `boxai-server` / deploy) |
+| `.env.cloudflare` | `CLOUDFLARE_*` | Full Cloudflare control of **小 QQ** account + `you-box.com` |
+| (server only) `/opt/boxai/.env` | **never** copy wholesale | App runtime DB/Redis/session/payment secrets |
+
+```bash
+set -a; source .env.boxai-admin; set +a
+set -a; source .env.cloudflare; set +a
+# offline CF canonical copy: ~/.config/boxai/cf-xiaoqq-full.env
+```
+
+Amp orb setup checklist: [`.agents/skills/managing-boxai-platform/reference/orb.md`](.agents/skills/managing-boxai-platform/reference/orb.md).
+
+### Cloudflare foundation (required for edge features)
+
+BoxAI edge infrastructure is the Cloudflare account **`123592844@qq.com's Account` (小 QQ)**:
+
+| | |
+|--|--|
+| Account ID | `4379d21a3d3eadc0e37d63abff091f31` |
+| Zone | `you-box.com` → `2a653c5c030f278f165adc1cd803adfd` |
+| Full-control token name | `xiaoqq-full-control` |
+| Env vars | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_ZONE_ID`, `CLOUDFLARE_ZONE_NAME`, `CLOUDFLARE_API_TOKEN` |
+
+**Agents developing or operating product features that need DNS, TLS edge, CDN, Workers, Pages, R2, D1, KV, Queues, Tunnels, AI Gateway, Email Routing/Sending, Images, Stream, WAF, or related CF products MUST use this account and token as the default foundation.** Load `.env.cloudflare` (or Amp `CLOUDFLARE_*` secrets); call `https://api.cloudflare.com/client/v4` with `Authorization: Bearer $CLOUDFLARE_API_TOKEN`. Do not invent a second CF account for BoxAI production edge unless explicitly directed.
+
+- Scope: full account permission groups on 小 QQ + full zone groups on `you-box.com` + R2 bucket edge.
+- Isolation: does **not** access the separate Gmail-owned Cloudflare account.
+- Never print or commit `CLOUDFLARE_API_TOKEN`. Prefer redacted verify: `GET /user/tokens/verify`.
 
 ### Project Governance
 

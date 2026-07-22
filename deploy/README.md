@@ -129,9 +129,12 @@ REDIS_CONN_STRING='redis://127.0.0.1:6379/0'
 | `scripts/server/build-native.sh` | Server-side web + go build |
 | `docker-compose.dev.yml` | Local PG/Redis only |
 | `web/default/.env.development` | Default `VITE_REACT_APP_SERVER_URL` |
+| [`docs/environment.md`](../docs/environment.md) | **Env inventory:** app, Amp orb `BOXAI_*`, Cloudflare `CLOUDFLARE_*` |
+| `.env.boxai-admin.example` | Template for admin API + SSH (real: gitignored `.env.boxai-admin`) |
+| `.env.cloudflare.example` | Template for 小 QQ full CF token (real: gitignored `.env.cloudflare`) |
 
 ## Platform admin skill
 
-API/config over management token; SSH only for host/infra:
+API/config over management token; SSH only for host/infra; Cloudflare edge via full-control token:
 
-See `.agents/skills/managing-boxai-platform/SKILL.md`.
+See `.agents/skills/managing-boxai-platform/SKILL.md` and Amp orb secrets in `reference/orb.md`.

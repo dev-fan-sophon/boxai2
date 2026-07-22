@@ -10,7 +10,9 @@ Use the management API for application configuration. Use SSH only for deploymen
 
 ## Required environment
 
-API operations read these variables:
+**Full map:** [`docs/environment.md`](../../../docs/environment.md). Amp wiring: [`reference/orb.md`](reference/orb.md).
+
+API operations read these variables (local: `.env.boxai-admin`):
 
 ```text
 BOXAI_BASE_URL=https://you-box.com
@@ -27,6 +29,17 @@ BOXAI_SSH_USER=<restricted deployment user preferred>
 BOXAI_SSH_PRIVATE_KEY=<private key or its base64 encoding>
 BOXAI_SSH_HOST_KEY=<pinned known_hosts line>
 ```
+
+Cloudflare edge (小 QQ / `you-box.com`; local: `.env.cloudflare` or `~/.config/boxai/cf-xiaoqq-full.env`):
+
+```text
+CLOUDFLARE_ACCOUNT_ID=4379d21a3d3eadc0e37d63abff091f31
+CLOUDFLARE_ZONE_ID=2a653c5c030f278f165adc1cd803adfd
+CLOUDFLARE_ZONE_NAME=you-box.com
+CLOUDFLARE_API_TOKEN=<xiaoqq-full-control>
+```
+
+Use `CLOUDFLARE_*` for DNS, Workers, R2, Email, Tunnels, AI Gateway, and other CF product APIs. This is the default foundation for BoxAI edge features.
 
 Never print, commit, paste into a thread, or return any secret value. Never read all of the production `.env` merely to inspect one setting. Query only the named variable needed for the task and redact command output.
 

@@ -8,6 +8,17 @@ The repository must contain executable `.agents/setup` and `.agents/resume` file
 
 Open the BoxAI project on `ampcode.com`, then open **Settings** and add the following values.
 
+**Canonical map (all env files):** [`docs/environment.md`](../../../../docs/environment.md).
+
+Local equivalents (gitignored on developer machines):
+
+| Amp / orb keys | Local file |
+|----------------|------------|
+| `BOXAI_*` | `.env.boxai-admin` (from `.env.boxai-admin.example`) |
+| `CLOUDFLARE_*` | `.env.cloudflare` (from `.env.cloudflare.example`; also `~/.config/boxai/cf-xiaoqq-full.env`) |
+
+### 2a. BoxAI management API + SSH
+
 Non-secret environment variables:
 
 ```text
@@ -29,6 +40,19 @@ BOXAI_SSH_HOST_KEY=<pinned known_hosts line>
 `BOXAI_SSH_HOST_KEY` is public material but should be protected from unauthorized modification because it establishes server identity. Obtain it from an already trusted machine or the server console and verify its fingerprint out of band. Do not have an orb accept an unverified `ssh-keyscan` result.
 
 Do not retain `BOXAI_ADMIN_PASSWORD` in project settings. It is needed only for the one-time token bootstrap and should be removed immediately afterward.
+
+### 2b. Cloudflare full-control (小 QQ / you-box.com)
+
+Agents building edge features (DNS, Workers, R2, Email, Tunnels, AI Gateway, …) must use the **小 QQ** Cloudflare account. Put these in Amp Settings (token as secret):
+
+```text
+CLOUDFLARE_ACCOUNT_ID=4379d21a3d3eadc0e37d63abff091f31
+CLOUDFLARE_ZONE_ID=2a653c5c030f278f165adc1cd803adfd
+CLOUDFLARE_ZONE_NAME=you-box.com
+CLOUDFLARE_API_TOKEN=<xiaoqq-full-control user API token>
+```
+
+Token name in the dashboard: `xiaoqq-full-control` (full account permission groups on 小 QQ + full zone groups on `you-box.com`). Local source of truth for the secret value: `~/.config/boxai/cf-xiaoqq-full.env` or repo `.env.cloudflare` (never commit).
 
 ## 3. Server-side SSH account
 
@@ -58,6 +82,12 @@ Ask the orb to load `managing-boxai-platform`, then perform read-only checks:
 .agents/skills/managing-boxai-platform/scripts/boxai-server 'systemctl is-active boxai'
 .agents/skills/managing-boxai-platform/scripts/boxai-server 'curl -fsS http://127.0.0.1:3000/api/status | head -c 120'
 .agents/skills/managing-boxai-platform/scripts/boxai-server 'cd /opt/boxai && docker compose -f docker-compose.infra.yml ps'
+
+# Cloudflare foundation (do not print CLOUDFLARE_API_TOKEN)
+curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  https://api.cloudflare.com/client/v4/user/tokens/verify
+curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID" | head -c 200
 ```
 
 Expected signals:
@@ -65,7 +95,7 @@ Expected signals:
 - Public API status returns JSON with `success: true`.
 - Authenticated user request succeeds without exposing the token.
 - SSH host-key verification succeeds; `boxai` systemd unit is `active`; infra compose shows healthy **postgres** and **redis** only (no app container).
-
+- CF token verify returns `success: true` / active; account name is `123592844@qq.com's Account`.
 ## 6. Deploy
 
 **Preferred:** push/merge to `main` and let GitHub Actions **Deploy production** run.
