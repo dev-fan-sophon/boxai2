@@ -6,6 +6,8 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
+import { getCommonHeaders } from '@/lib/api'
+
 import {
   importPlaygroundAsset,
   type PlaygroundAsset,
@@ -53,6 +55,18 @@ function withDownloadParam(url: string): string {
   return url.includes('?') ? `${url}&download=1` : `${url}?download=1`
 }
 
+function mediaFetchHeaders(url: string): HeadersInit | undefined {
+  // Same-origin private streams may still sit behind UserAuth on other
+  // endpoints; attach New-Api-User when available. Session cookie alone is
+  // enough for /assets/:id/content (UserSessionAuth).
+  if (!SAME_ORIGIN_DOWNLOADABLE.test(url) && !url.includes('/api/')) {
+    return undefined
+  }
+  const headers = getCommonHeaders()
+  delete headers['Content-Type']
+  return headers
+}
+
 async function fetchMedia(sourceUrl: string): Promise<Blob> {
   let fetchUrl = sourceUrl
   // Force attachment stream on same-origin media endpoints so browsers get a
@@ -60,7 +74,10 @@ async function fetchMedia(sourceUrl: string): Promise<Blob> {
   if (SAME_ORIGIN_DOWNLOADABLE.test(sourceUrl)) {
     fetchUrl = withDownloadParam(sourceUrl)
   }
-  const response = await fetch(fetchUrl, { credentials: 'include' })
+  const response = await fetch(fetchUrl, {
+    credentials: 'include',
+    headers: mediaFetchHeaders(sourceUrl),
+  })
   if (!response.ok) {
     throw new Error(`Media download failed (${response.status})`)
   }

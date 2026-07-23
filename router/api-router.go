@@ -344,6 +344,15 @@ func SetApiRouter(router *gin.Engine) {
 			taskRoute.GET("/", middleware.AdminAuth(), controller.GetAllTask)
 		}
 
+		// Playground media streams: session cookie only (no New-Api-User header).
+		// Browser <img>/<video>/<audio> cannot set custom headers, so UserAuth
+		// would 401 every same-origin content URL even when the user is logged in.
+		playgroundMediaRoute := apiRouter.Group("/playground")
+		playgroundMediaRoute.Use(middleware.UserSessionAuth())
+		{
+			playgroundMediaRoute.GET("/assets/:id/content", controller.GetPlaygroundAssetContent)
+		}
+
 		// Playground data APIs (assets, estimate, conversations, personas, etc.)
 		playgroundDataRoute := apiRouter.Group("/playground")
 		playgroundDataRoute.Use(middleware.UserAuth())
@@ -358,7 +367,6 @@ func SetApiRouter(router *gin.Engine) {
 			playgroundDataRoute.GET("/assets", controller.ListPlaygroundAssets)
 			playgroundDataRoute.POST("/assets", middleware.UploadRateLimit(), controller.UploadPlaygroundAsset)
 			playgroundDataRoute.POST("/assets/import", middleware.UploadRateLimit(), controller.ImportPlaygroundAsset)
-			playgroundDataRoute.GET("/assets/:id/content", controller.GetPlaygroundAssetContent)
 			playgroundDataRoute.POST("/assets/:id/publish", controller.PublishPlaygroundAsset)
 			playgroundDataRoute.POST("/assets/:id/unpublish", controller.UnpublishPlaygroundAsset)
 			playgroundDataRoute.DELETE("/assets/:id", controller.DeletePlaygroundAsset)

@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { api } from '@/lib/api'
+import { api, getCommonHeaders } from '@/lib/api'
 
 import { API_ENDPOINTS } from './constants'
 import type { ApiAgent } from './lib/workbench/agents-data'
@@ -203,7 +203,12 @@ export async function resolveMediaForUpstream(
     if (!value.startsWith('http') && !value.startsWith('/')) {
       fetchUrl = `/${value}`
     }
-    const res = await fetch(fetchUrl, { credentials: 'include' })
+    const headers = getCommonHeaders()
+    delete headers['Content-Type']
+    const res = await fetch(fetchUrl, {
+      credentials: 'include',
+      headers,
+    })
     if (!res.ok) {
       throw new Error(`Failed to load reference media (${res.status})`)
     }
