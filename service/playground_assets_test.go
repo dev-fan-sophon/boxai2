@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/service/storage"
 	"github.com/stretchr/testify/assert"
@@ -137,4 +138,34 @@ func TestSavePlaygroundAssetFile_SizeLimit(t *testing.T) {
 	big := bytes.Repeat([]byte("a"), int(PlaygroundAssetMaxImageBytes)+10)
 	_, _, _, _, err := SavePlaygroundAssetFile(1, "big.png", "image/png", bytes.NewReader(big), int64(len(big)))
 	assert.Error(t, err)
+}
+
+func TestOpenPlaygroundAssetContentNeverPresignRedirects(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("STORAGE_BACKEND", "local")
+	t.Setenv("PLAYGROUND_ASSETS_DIR", root)
+	storage.Reset()
+	t.Cleanup(storage.Reset)
+
+	data := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+	}
+	key, backend, _, _, err := SavePlaygroundAssetFile(3, "a.png", "image/png", bytes.NewReader(data), int64(len(data)))
+	require.NoError(t, err)
+	require.Equal(t, "local", backend)
+
+	// Even if the process default becomes r2, opening a local-backed key must
+	// stream (empty redirect) — browsers never follow a cross-origin hop.
+	t.Setenv("STORAGE_BACKEND", "r2")
+	storage.Reset()
+
+	redirect, body, err := OpenPlaygroundAssetContent(context.Background(), "local", key, time.Minute)
+	require.NoError(t, err)
+	assert.Empty(t, redirect, "private playground assets must not presign-redirect")
+	require.NotNil(t, body)
+	got, err := io.ReadAll(body)
+	require.NoError(t, body.Close())
+	require.NoError(t, err)
+	assert.Equal(t, data, got)
 }

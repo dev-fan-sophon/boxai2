@@ -14,6 +14,9 @@ import {
 
 type DownloadableMediaKind = 'image' | 'video' | 'audio'
 
+const SAME_ORIGIN_DOWNLOADABLE =
+  /(?:\/api\/playground\/assets\/\d+\/content|\/v1\/videos\/[^/?#]+\/content)(?:\?|$)/
+
 const EXTENSIONS: Record<string, string> = {
   'audio/aac': 'aac',
   'audio/flac': 'flac',
@@ -46,10 +49,16 @@ export function generatedMediaExtension(
   return EXTENSIONS[normalizedMime] ?? DEFAULT_EXTENSIONS[kind]
 }
 
+function withDownloadParam(url: string): string {
+  return url.includes('?') ? `${url}&download=1` : `${url}?download=1`
+}
+
 async function fetchMedia(sourceUrl: string): Promise<Blob> {
   let fetchUrl = sourceUrl
-  if (/\/api\/playground\/assets\/\d+\/content(?:\?|$)/.test(sourceUrl)) {
-    fetchUrl += sourceUrl.includes('?') ? '&download=1' : '?download=1'
+  // Force attachment stream on same-origin media endpoints so browsers get a
+  // CORS-readable body (no cross-origin R2 redirect).
+  if (SAME_ORIGIN_DOWNLOADABLE.test(sourceUrl)) {
+    fetchUrl = withDownloadParam(sourceUrl)
   }
   const response = await fetch(fetchUrl, { credentials: 'include' })
   if (!response.ok) {
@@ -84,6 +93,8 @@ export async function downloadGeneratedMedia(
   try {
     blob = await fetchMedia(sourceUrl)
   } catch (error) {
+    // External provider URLs often block browser CORS; import server-side then
+    // stream the stored asset.
     if (!/^https?:\/\//i.test(sourceUrl)) throw error
     const asset = await importPlaygroundAsset(sourceUrl, kind)
     blob = await fetchMedia(asset.url)

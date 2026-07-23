@@ -126,3 +126,13 @@ func TestAllowlistedResultURL(t *testing.T) {
 	assert.Equal(t, "", allowlistedResultURL("/\\evil"))
 	assert.Equal(t, "", allowlistedResultURL("/api//evil.example/x"))
 }
+
+func TestIsPlaygroundAllowedOrigin(t *testing.T) {
+	assert.True(t, isPlaygroundAllowedOrigin("https://you-box.com"))
+	assert.True(t, isPlaygroundAllowedOrigin("https://www.you-box.com"))
+	assert.True(t, isPlaygroundAllowedOrigin("http://127.0.0.1:3000"))
+	assert.True(t, isPlaygroundAllowedOrigin("http://localhost:5173"))
+	assert.False(t, isPlaygroundAllowedOrigin("https://evil.example"))
+	assert.False(t, isPlaygroundAllowedOrigin("https://you-box.com.evil.example"))
+	assert.False(t, isPlaygroundAllowedOrigin(""))
+}

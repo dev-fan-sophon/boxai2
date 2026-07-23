@@ -55,7 +55,12 @@ export function ComposerShell(props: ComposerShellProps) {
     >
       <PromptInput
         className='relative'
-        groupClassName='bg-background/95 dark:bg-background/80 border-border/70 shadow-[0_18px_60px_-32px_rgba(0,0,0,0.65)] ring-1 ring-foreground/5 rounded-xl overflow-hidden transition-all duration-200 focus-within:border-primary/45 focus-within:ring-primary/15 focus-within:shadow-[0_22px_70px_-34px_rgba(0,0,0,0.75)]'
+        groupClassName={cn(
+          'bg-background/95 dark:bg-background/80 border-border/70 ring-1 ring-foreground/5 rounded-xl overflow-hidden',
+          'shadow-[0_18px_60px_-32px_rgba(0,0,0,0.65)] transition-all duration-200',
+          'focus-within:border-primary/45 focus-within:ring-primary/15 focus-within:shadow-[0_22px_70px_-34px_rgba(0,0,0,0.75)]',
+          props.disabled && 'opacity-90'
+        )}
         onSubmit={props.onSubmit}
       >
         <PromptInputTextarea
@@ -90,8 +95,14 @@ export function ComposerShell(props: ComposerShellProps) {
                 </PromptInputButton>
               ) : (
                 <PromptInputButton
-                  className='bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground h-8 px-3 font-medium shadow-sm'
-                  disabled={!props.canSubmit}
+                  className={cn(
+                    'bg-primary text-primary-foreground hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground h-8 px-3 font-medium shadow-sm',
+                    'transition-transform active:scale-[0.97]',
+                    props.canSubmit &&
+                      !props.disabled &&
+                      'shadow-primary/25 shadow-md'
+                  )}
+                  disabled={!props.canSubmit || props.disabled}
                   type='submit'
                   variant='default'
                 >

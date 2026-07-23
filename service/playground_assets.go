@@ -3,7 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -239,20 +238,16 @@ func SavePlaygroundAssetFile(userId int, originalName, declaredMime string, r io
 	return storageKey, store.Backend(), mimeType, kind, nil
 }
 
-// OpenPlaygroundAssetContent resolves an asset for delivery. When the backend
-// supports presigned URLs (R2) it returns a redirect URL; otherwise it returns
-// a reader for streaming (local). Exactly one of redirectURL/body is non-empty.
+// OpenPlaygroundAssetContent resolves an asset for same-origin delivery.
+// Private playground media is always streamed through the app (never redirected
+// to a cross-origin presigned R2 URL) so browser <img>/<video>/fetch downloads
+// do not depend on R2 CORS. redirectURL is reserved for future opt-in CDNs and
+// is empty for the supported backends today. ttl is ignored.
 func OpenPlaygroundAssetContent(ctx context.Context, backend, storageKey string, ttl time.Duration) (redirectURL string, body io.ReadCloser, err error) {
+	_ = ttl
 	store, err := storage.ForBackend(backend)
 	if err != nil {
 		return "", nil, err
-	}
-	url, perr := store.PresignGet(ctx, storageKey, ttl)
-	if perr == nil {
-		return url, nil, nil
-	}
-	if !errors.Is(perr, storage.ErrPresignUnsupported) {
-		return "", nil, perr
 	}
 	rc, oerr := store.Open(ctx, storageKey)
 	if oerr != nil {

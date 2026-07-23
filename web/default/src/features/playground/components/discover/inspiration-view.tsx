@@ -48,6 +48,18 @@ type InspirationViewProps = {
   className?: string
 }
 
+function mediaToolLabel(
+  modality: StudioModality,
+  model: string | undefined,
+  t: (key: string) => string
+): string {
+  if (modality === 'image') return t('Image generation')
+  if (modality === 'video') return t('Video generation')
+  if (modality === 'audio') return t('Audio generation')
+  const modelPart = model?.trim() ? model : t('Chat')
+  return `${modelPart} · ${t(modalityLabelKey(modality))}`
+}
+
 /**
  * Full-width Inspiration view (templates / my works / recent prompts)
  * rendered in the workspace center when the toolbar's Inspiration tab is
@@ -365,7 +377,9 @@ export function InspirationView(props: InspirationViewProps) {
                   src={work.previewUrl}
                   alt={work.title}
                   loading='lazy'
-                  className='mt-2 aspect-video w-full rounded-lg object-cover'
+                  decoding='async'
+                  referrerPolicy='no-referrer'
+                  className='mt-2 aspect-video w-full rounded-lg object-contain bg-black/5'
                 />
               )}
               {work.previewUrl && work.modality === 'video' && (
@@ -405,8 +419,8 @@ export function InspirationView(props: InspirationViewProps) {
               <p className='text-foreground line-clamp-2 text-sm'>
                 {item.prompt}
               </p>
-              <p className='text-muted-foreground mt-1 font-mono text-[10px]'>
-                {item.model} · {t(modalityLabelKey(item.modality))}
+              <p className='text-muted-foreground mt-1 text-[10px]'>
+                {mediaToolLabel(item.modality, item.model, t)}
               </p>
             </button>
           ))}

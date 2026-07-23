@@ -259,20 +259,12 @@ func GetPlaygroundAssetContent(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
+	// Always stream same-origin (no R2 presign 302). Private objects stay
+	// behind user auth; browser fetch/download never crosses origins.
 	forceDownload := c.Query("download") == "1"
-	var redirectURL string
-	var body io.ReadCloser
-	if forceDownload {
-		body, err = service.OpenPlaygroundAssetContentDirect(c.Request.Context(), asset.Backend, asset.StorageKey)
-	} else {
-		redirectURL, body, err = service.OpenPlaygroundAssetContent(c.Request.Context(), asset.Backend, asset.StorageKey, 0)
-	}
+	body, err := service.OpenPlaygroundAssetContentDirect(c.Request.Context(), asset.Backend, asset.StorageKey)
 	if err != nil {
 		c.Status(http.StatusNotFound)
-		return
-	}
-	if redirectURL != "" {
-		c.Redirect(http.StatusFound, redirectURL)
 		return
 	}
 	defer body.Close()
@@ -280,8 +272,19 @@ func GetPlaygroundAssetContent(c *gin.Context) {
 		c.Header("Content-Type", asset.Mime)
 	}
 	c.Header("X-Content-Type-Options", "nosniff")
+	// Allow credentialed same-origin clients; harmless if unused.
+	if origin := c.GetHeader("Origin"); origin != "" && isPlaygroundAllowedOrigin(origin) {
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Vary", "Origin")
+		c.Header("Access-Control-Expose-Headers", "Content-Type, Content-Length, Content-Disposition")
+	}
 	if forceDownload {
-		c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(asset.Name)}))
+		name := asset.Name
+		if name == "" {
+			name = "download"
+		}
+		c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(name)}))
 		c.Header("Cache-Control", "private, no-store")
 	} else {
 		c.Header("Cache-Control", "private, max-age=3600")
@@ -289,6 +292,22 @@ func GetPlaygroundAssetContent(c *gin.Context) {
 	c.Status(http.StatusOK)
 	if _, err := io.Copy(c.Writer, body); err != nil {
 		common.SysError("stream playground asset: " + err.Error())
+	}
+}
+
+// isPlaygroundAllowedOrigin gates CORS reflections for playground media.
+// Same-site app origins only — never reflect arbitrary Origin headers.
+func isPlaygroundAllowedOrigin(origin string) bool {
+	switch strings.ToLower(strings.TrimSpace(origin)) {
+	case "https://you-box.com", "https://www.you-box.com":
+		return true
+	default:
+		// Local / orb dev hosts (http loopback only).
+		if strings.HasPrefix(origin, "http://127.0.0.1:") ||
+			strings.HasPrefix(origin, "http://localhost:") {
+			return true
+		}
+		return false
 	}
 }
 

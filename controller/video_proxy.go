@@ -6,8 +6,10 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -60,9 +62,10 @@ func VideoProxy(c *gin.Context) {
 	// Playground video outputs are persisted independently of the upstream
 	// task. Prefer that durable, owner-scoped asset once it is available so old
 	// chat cards do not depend on temporary provider URLs or channel secrets.
+	// Stream (do not 302 to R2) so browser fetch downloads stay same-origin.
 	if run, runErr := model.GetPlaygroundRunByTaskId(taskID, userID); runErr == nil && run.AssetId > 0 {
-		if _, assetErr := model.GetPlaygroundAsset(run.AssetId, userID); assetErr == nil {
-			c.Redirect(http.StatusFound, fmt.Sprintf("/api/playground/assets/%d/content", run.AssetId))
+		if asset, assetErr := model.GetPlaygroundAsset(run.AssetId, userID); assetErr == nil {
+			streamPlaygroundVideoAsset(c, asset)
 			return
 		}
 	}
@@ -240,6 +243,42 @@ func VideoProxy(c *gin.Context) {
 	c.Writer.WriteHeader(resp.StatusCode)
 	if _, err = io.Copy(c.Writer, io.MultiReader(bytes.NewReader(header), resp.Body)); err != nil {
 		logger.LogError(c.Request.Context(), fmt.Sprintf("Failed to stream video content: %s", err.Error()))
+	}
+}
+
+// streamPlaygroundVideoAsset delivers a stored playground video asset inline
+// (or as attachment when ?download=1), always streaming through the app so
+// browser downloads are not blocked by cross-origin R2 redirects.
+func streamPlaygroundVideoAsset(c *gin.Context, asset *model.PlaygroundAsset) {
+	forceDownload := c.Query("download") == "1"
+	body, err := service.OpenPlaygroundAssetContentDirect(c.Request.Context(), asset.Backend, asset.StorageKey)
+	if err != nil {
+		videoProxyError(c, http.StatusNotFound, "invalid_request_error", "Video asset not found")
+		return
+	}
+	defer body.Close()
+	if asset.Mime != "" {
+		c.Writer.Header().Set("Content-Type", asset.Mime)
+	} else {
+		c.Writer.Header().Set("Content-Type", "video/mp4")
+	}
+	c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+	if forceDownload {
+		name := asset.Name
+		if name == "" {
+			name = "video.mp4"
+		}
+		c.Writer.Header().Set(
+			"Content-Disposition",
+			mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(name)}),
+		)
+		c.Writer.Header().Set("Cache-Control", "private, no-store")
+	} else {
+		c.Writer.Header().Set("Cache-Control", "private, max-age=3600")
+	}
+	c.Status(http.StatusOK)
+	if _, err := io.Copy(c.Writer, body); err != nil {
+		logger.LogError(c.Request.Context(), fmt.Sprintf("stream playground video asset: %s", err.Error()))
 	}
 }
 

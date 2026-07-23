@@ -45,22 +45,42 @@ export function useStudio() {
   )
 
   const imageMutation = useMutation({
-    mutationFn: generateImages,
-    onSuccess: (images, variables) => {
-      setImages(images)
-      void (async () => {
-        await Promise.allSettled(
-          images.map(async (image, index) => {
+    // Persist to same-origin assets before surfacing URLs so <img> and
+    // download both work even when the provider blocks hotlinking / CORS.
+    mutationFn: async (variables: Parameters<typeof generateImages>[0]) => {
+      const generated = await generateImages(variables)
+      const persisted = await Promise.all(
+        generated.map(async (image, index) => {
+          try {
             const asset = await persistGeneratedMediaAsset(
               image.url,
               `generated-image-${index + 1}`,
               'image'
             )
+            return {
+              url: asset.url,
+              revisedPrompt: image.revisedPrompt,
+              assetId: asset.id,
+            }
+          } catch {
+            // Fall back to the original URL (with no-referrer on display).
+            return { ...image, assetId: undefined as number | undefined }
+          }
+        })
+      )
+      return persisted
+    },
+    onSuccess: (images, variables) => {
+      setImages(images)
+      void (async () => {
+        await Promise.allSettled(
+          images.map(async (image) => {
+            if (!image.assetId) return
             await createPlaygroundRun({
               modality: 'image',
               model: variables.model,
               prompt: variables.prompt,
-              asset_id: asset.id,
+              asset_id: image.assetId,
             })
           })
         )

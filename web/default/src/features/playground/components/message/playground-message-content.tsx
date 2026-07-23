@@ -102,6 +102,15 @@ export function PlaygroundMessageContent({
       ? videoResult.failReason
       : message.managedTool?.error
 
+  let managedToolTitle = t('Platform tool')
+  if (message.managedTool?.action === 'generate_image') {
+    managedToolTitle = t('Image generation')
+  } else if (message.managedTool?.action === 'generate_video') {
+    managedToolTitle = t('Video generation')
+  } else if (message.managedTool?.action === 'web_search') {
+    managedToolTitle = t('Web search')
+  }
+
   return (
     <div
       className={cn(
@@ -152,14 +161,7 @@ export function PlaygroundMessageContent({
       {message.managedTool && (
         <section className='border-border bg-muted/30 mb-2 rounded-xl border p-3'>
           <div className='flex flex-wrap items-center justify-between gap-2 text-sm'>
-            <div>
-              <span className='font-medium'>{t('Platform tool')}</span>
-              {message.managedTool.model && (
-                <span className='text-muted-foreground ml-2'>
-                  {message.managedTool.model}
-                </span>
-              )}
-            </div>
+            <span className='font-medium'>{managedToolTitle}</span>
             <span className='bg-muted rounded-full px-2 py-0.5 text-xs'>
               {t(toolStatus || message.managedTool.status)}
             </span>
@@ -174,7 +176,10 @@ export function PlaygroundMessageContent({
                   <img
                     src={url}
                     alt={t('Generated image')}
-                    className='w-full'
+                    className='w-full object-contain'
+                    referrerPolicy='no-referrer'
+                    loading='lazy'
+                    decoding='async'
                   />
                   <Button
                     size='icon-sm'

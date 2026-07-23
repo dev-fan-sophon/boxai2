@@ -6,7 +6,14 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
-import { ChevronDown, Layers } from 'lucide-react'
+import {
+  ChevronDown,
+  ImageIcon,
+  Layers,
+  Music2,
+  Video,
+  type LucideIcon,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { useMediaQuery } from '@/hooks/use-media-query'
@@ -18,6 +25,7 @@ import {
   MODALITY_COLORS,
   modalityLabelKey,
 } from '../../lib/workbench/modality-styles'
+import type { StudioModality } from '../../types'
 import { ModelBrandIcon } from '../catalog/model-brand-icon'
 
 type WorkspaceHeaderProps = {
@@ -31,9 +39,19 @@ type WorkspaceHeaderProps = {
   actions?: React.ReactNode
 }
 
+const MEDIA_TOOL: Record<
+  Exclude<StudioModality, 'chat'>,
+  { titleKey: string; Icon: LucideIcon }
+> = {
+  image: { titleKey: 'Image generation', Icon: ImageIcon },
+  video: { titleKey: 'Video generation', Icon: Video },
+  audio: { titleKey: 'Audio generation', Icon: Music2 },
+}
+
 /**
  * Workspace header showing the current model (or duo mode). On mobile the
  * model block doubles as the catalog drawer trigger.
+ * Image/video/audio tools show a generic modality title instead of the model id.
  */
 export function WorkspaceHeader(props: WorkspaceHeaderProps) {
   const { t } = useTranslation()
@@ -41,9 +59,14 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
   const modality = getModelModality(
     props.pricingModel ?? { model_name: props.model }
   )
+  const mediaTool =
+    modality === 'image' || modality === 'video' || modality === 'audio'
+      ? MEDIA_TOOL[modality]
+      : null
 
-  const modelInfo =
-    props.mode === 'duo' ? (
+  let modelInfo: React.ReactNode
+  if (props.mode === 'duo') {
+    modelInfo = (
       <span className='flex min-w-0 items-center gap-2'>
         <span className='bg-primary/15 text-primary flex size-7 shrink-0 items-center justify-center rounded-lg'>
           <Layers className='size-4' aria-hidden='true' />
@@ -52,7 +75,21 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
           {t('Multi-model collaboration')}
         </span>
       </span>
-    ) : (
+    )
+  } else if (mediaTool) {
+    const Icon = mediaTool.Icon
+    modelInfo = (
+      <span className='flex min-w-0 items-center gap-2'>
+        <span className='border-border bg-muted/60 flex size-7 shrink-0 items-center justify-center rounded-lg border'>
+          <Icon className='size-4' aria-hidden='true' />
+        </span>
+        <span className='text-foreground truncate text-sm font-semibold'>
+          {t(mediaTool.titleKey)}
+        </span>
+      </span>
+    )
+  } else {
+    modelInfo = (
       <span className='flex min-w-0 items-center gap-2'>
         <span className='border-border bg-muted/60 flex size-7 shrink-0 items-center justify-center rounded-lg border'>
           <ModelBrandIcon
@@ -63,7 +100,7 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
           />
         </span>
         <span className='text-foreground truncate font-mono text-sm font-semibold'>
-          {props.model}
+          {props.model || t('Select a model')}
         </span>
         <span
           className={cn(
@@ -73,13 +110,9 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
         >
           {t(modalityLabelKey(modality))}
         </span>
-        {props.group && (
-          <span className='bg-muted/50 text-muted-foreground hidden shrink-0 rounded px-1.5 py-0.5 text-[10px] sm:inline'>
-            {props.group}
-          </span>
-        )}
       </span>
     )
+  }
 
   return (
     <div className='border-border flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3'>

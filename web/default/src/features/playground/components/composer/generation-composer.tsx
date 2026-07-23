@@ -52,18 +52,27 @@ export function GenerationComposer(props: GenerationComposerProps) {
     props.onSubmit(text.trim())
   }
 
+  let placeholder = t('Describe what you want to create…')
+  if (props.modality === 'audio') {
+    placeholder = t('Enter the text to speak…')
+  } else if (props.modality === 'video') {
+    placeholder = t('Describe the video scene and motion…')
+  } else if (props.modality === 'image') {
+    placeholder = t('Describe the image you want to create…')
+  }
+
   return (
-    <div className='mx-auto w-full max-w-4xl shrink-0 px-2 pb-3 md:px-3 md:pb-4'>
+    <div className='mx-auto w-full max-w-4xl shrink-0 px-2 py-3 md:px-3 md:py-3.5'>
+      {props.isPending && (
+        <p className='text-muted-foreground mb-2 px-1 text-center text-[11px]'>
+          {t('Generating… you can keep editing the prompt for the next run.')}
+        </p>
+      )}
       <ComposerShell
         text={text}
         onTextChange={setText}
         onSubmit={submit}
-        placeholder={t(
-          props.modality === 'audio'
-            ? 'Enter the text to speak…'
-            : 'Describe what you want to create…'
-        )}
-        disabled={props.isPending}
+        placeholder={placeholder}
         canSubmit={Boolean(text.trim() && model && !props.isPending)}
         tools={
           showMediaSlot ? (

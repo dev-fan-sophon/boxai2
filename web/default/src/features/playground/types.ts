@@ -206,6 +206,8 @@ export type StudioSettings = {
 export type GeneratedImage = {
   url: string
   revisedPrompt?: string
+  /** Set when the image was persisted to a playground asset before display. */
+  assetId?: number
 }
 
 export type VideoSubmission = {

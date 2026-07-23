@@ -6,13 +6,16 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
-import { Download, Loader2 } from 'lucide-react'
-import { useState } from 'react'
+import { Check, Download, Loader2 } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import type { PricingModel } from '@/features/pricing/types'
+import { MOTION_TRANSITION } from '@/lib/motion'
+import { cn } from '@/lib/utils'
 import { usePlaygroundStore } from '@/stores/playground-store'
 
 import type { UseStudioResult } from '../../hooks/use-studio'
@@ -21,6 +24,14 @@ import { downloadGeneratedMedia } from '../../lib/download-generated-media'
 import type { StudioModality } from '../../types'
 import type { MediaReference } from '../composer/attachments/media-reference-slot'
 import { GenerationComposer } from '../composer/generation-composer'
+import {
+  GenerationErrorState,
+  GenerationProgress,
+} from './generation-progress'
+import {
+  GenerationImageCard,
+  GenerationMediaResult,
+} from './generation-result-card'
 import { ModelHero } from './model-hero'
 
 type GenerationWorkspaceProps = {
@@ -38,13 +49,18 @@ type GenerationWorkspaceProps = {
  */
 export function GenerationWorkspace(props: GenerationWorkspaceProps) {
   const { t } = useTranslation()
+  const shouldReduce = useReducedMotion()
   const { studio } = props
   const [reference, setReference] = useState<MediaReference | null>(null)
   const [referenceKey, setReferenceKey] = useState('')
   const [downloading, setDownloading] = useState('')
+  const [downloadDone, setDownloadDone] = useState('')
 
   const model = usePlaygroundStore((state) => state.config.model)
   const group = usePlaygroundStore((state) => state.config.group)
+  const imageCount = usePlaygroundStore(
+    (state) => state.studioSettings.imageCount
+  )
   const addRecentPrompt = usePlaygroundStore((state) => state.addRecentPrompt)
   const addMyWork = usePlaygroundStore((state) => state.addMyWork)
 
@@ -71,12 +87,28 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
     error = studio.videoMutation.error
   }
 
+  const videoWaiting =
+    props.modality === 'video' &&
+    Boolean(studio.video) &&
+    !videoTask.ready &&
+    !videoTask.failed
+
+  const showProgress = isPending || videoWaiting
+
   const hasOutput =
-    (props.modality === 'image' && studio.images.length > 0) ||
-    (props.modality === 'video' && Boolean(studio.video)) ||
-    (props.modality === 'audio' && Boolean(studio.audioUrl))
+    (props.modality === 'image' && studio.images.length > 0 && !isPending) ||
+    (props.modality === 'video' && Boolean(studio.video) && videoTask.ready) ||
+    (props.modality === 'audio' && Boolean(studio.audioUrl) && !isPending)
+
+  const showHero = !hasOutput && !showProgress && !error && !videoTask.failed
 
   const [lastPrompt, setLastPrompt] = useState('')
+
+  useEffect(() => {
+    if (!downloadDone) return
+    const id = window.setTimeout(() => setDownloadDone(''), 1600)
+    return () => window.clearTimeout(id)
+  }, [downloadDone])
 
   const downloadMedia = async (
     sourceUrl: string,
@@ -86,6 +118,8 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
     setDownloading(filename)
     try {
       await downloadGeneratedMedia(sourceUrl, filename, kind)
+      setDownloadDone(filename)
+      toast.success(t('Download started'))
     } catch {
       toast.error(t('Download failed'))
     } finally {
@@ -148,189 +182,215 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
     }
   }
 
+  const videoFilename = `video-${videoTaskId}`
+
+  const downloadIcon = (filename: string) => {
+    if (downloading === filename) {
+      return <Loader2 className='size-4 animate-spin' />
+    }
+    if (downloadDone === filename) {
+      return <Check className='size-4 text-emerald-500' />
+    }
+    return <Download className='size-4' />
+  }
+
+  const downloadLabel = (filename: string, idleLabel: string) =>
+    downloadDone === filename ? t('Saved') : idleLabel
+
   return (
     <div className='relative flex min-h-0 flex-1 flex-col overflow-hidden'>
       <div className='min-h-0 flex-1 overflow-y-auto'>
-        {!hasOutput && !isPending && !error && (
-          <ModelHero model={props.pricingModel} modelName={model} />
-        )}
+        <AnimatePresence mode='wait' initial={false}>
+          {showHero && (
+            <motion.div
+              key={`hero-${props.modality}`}
+              exit={
+                shouldReduce
+                  ? undefined
+                  : { opacity: 0, y: -8, transition: MOTION_TRANSITION.fast }
+              }
+            >
+              <ModelHero
+                model={props.pricingModel}
+                modelName={model}
+                modality={props.modality}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className='mx-auto w-full max-w-5xl px-4 pb-6 md:px-6'>
           <section
-            className='flex min-h-[12rem] flex-col'
-            aria-busy={isPending}
+            className={cn(
+              'flex min-h-[12rem] flex-col',
+              showProgress || hasOutput || error ? 'pt-4 md:pt-6' : ''
+            )}
+            aria-busy={showProgress}
             aria-live='polite'
           >
-            {props.modality === 'image' && studio.images.length > 0 && (
-              <div className='grid w-full grid-cols-1 gap-3 sm:grid-cols-2'>
-                {studio.images.map((image, index) => {
-                  const filename = `generated-image-${index + 1}`
-                  return (
-                    <figure
-                      key={image.url}
-                      className='border-border bg-muted/60 overflow-hidden rounded-xl border'
-                    >
-                      <img
-                        src={image.url}
+            <AnimatePresence mode='wait' initial={false}>
+              {showProgress && (
+                <motion.div
+                  key='progress'
+                  initial={shouldReduce ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={shouldReduce ? undefined : { opacity: 0 }}
+                  transition={MOTION_TRANSITION.fast}
+                >
+                  <GenerationProgress
+                    modality={props.modality}
+                    imageCount={
+                      props.modality === 'image' ? imageCount : undefined
+                    }
+                    percent={
+                      props.modality === 'video' ? videoTask.percent : null
+                    }
+                    detail={
+                      props.modality === 'video' && studio.video
+                        ? studio.video.taskId
+                        : undefined
+                    }
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {!showProgress &&
+              props.modality === 'image' &&
+              studio.images.length > 0 && (
+                <div
+                  className={cn(
+                    'grid w-full gap-3',
+                    studio.images.length === 1
+                      ? 'mx-auto max-w-xl grid-cols-1'
+                      : 'grid-cols-1 sm:grid-cols-2'
+                  )}
+                >
+                  {studio.images.map((image, index) => {
+                    const filename = `generated-image-${index + 1}`
+                    return (
+                      <GenerationImageCard
+                        key={image.url}
+                        url={image.url}
                         alt={image.revisedPrompt || t('Generated image')}
-                        className='aspect-square w-full object-cover'
+                        caption={image.revisedPrompt}
+                        filename={filename}
+                        index={index}
+                        downloading={downloading === filename}
+                        onDownload={() =>
+                          void downloadMedia(image.url, filename, 'image')
+                        }
                       />
-                      {image.revisedPrompt && (
-                        <figcaption className='text-muted-foreground p-2 text-xs text-pretty'>
-                          {image.revisedPrompt}
-                        </figcaption>
-                      )}
-                      <div className='p-2 pt-0'>
-                        <Button
-                          type='button'
-                          variant='outline'
-                          size='sm'
-                          disabled={downloading === filename}
-                          onClick={() =>
-                            void downloadMedia(image.url, filename, 'image')
-                          }
-                        >
-                          {downloading === filename ? (
-                            <Loader2 className='size-4 animate-spin' />
-                          ) : (
-                            <Download className='size-4' />
-                          )}
-                          {t('Download')}
-                        </Button>
-                      </div>
-                    </figure>
-                  )
-                })}
-              </div>
-            )}
-            {props.modality === 'video' && studio.video && videoTask.ready && (
-              <div className='mx-auto w-full max-w-3xl space-y-3'>
-                <video
-                  controls
-                  className='border-border w-full rounded-2xl border bg-black'
-                  src={videoTask.resultUrl}
-                >
-                  {t('Your browser does not support video playback.')}
-                </video>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  className='border-border bg-muted/50 text-foreground'
-                  disabled={downloading === `video-${videoTaskId}`}
-                  onClick={() =>
-                    void downloadMedia(
-                      videoTask.resultUrl,
-                      `video-${videoTaskId}`,
-                      'video'
                     )
-                  }
-                >
-                  {downloading === `video-${videoTaskId}` ? (
-                    <Loader2 className='size-4 animate-spin' />
-                  ) : (
-                    <Download className='size-4' />
-                  )}
-                  {t('Download video')}
-                </Button>
-              </div>
-            )}
-            {props.modality === 'video' &&
-              studio.video &&
-              !videoTask.ready &&
-              !videoTask.failed && (
-                <div className='border-border bg-muted/40 rounded-2xl border p-6 text-center'>
-                  <p className='text-foreground font-medium'>
-                    {t('Video task submitted')}
-                  </p>
-                  <p className='text-muted-foreground mt-1 font-mono text-xs'>
-                    {studio.video.taskId}
-                  </p>
-                  <p className='text-muted-foreground mt-2 text-sm text-pretty'>
-                    {t(
-                      'Rendering your video. It will play here automatically when ready.'
-                    )}
-                  </p>
-                  {videoTask.percent !== null && videoTask.percent > 0 && (
-                    <div className='bg-muted mx-auto mt-4 h-1.5 w-full max-w-sm overflow-hidden rounded-full'>
-                      <div
-                        className='bg-primary h-full rounded-full transition-all'
-                        style={{ width: `${videoTask.percent}%` }}
-                      />
-                    </div>
-                  )}
+                  })}
                 </div>
               )}
-            {props.modality === 'video' && studio.video && videoTask.failed && (
-              <div className='border-destructive/40 bg-destructive/5 rounded-2xl border p-6 text-center'>
-                <p className='text-foreground font-medium'>
-                  {t('Video generation failed.')}
-                </p>
-                {videoTask.failReason && (
-                  <p className='text-destructive mt-2 text-xs text-pretty'>
-                    {videoTask.failReason}
-                  </p>
-                )}
-              </div>
-            )}
-            {props.modality === 'audio' && studio.audioUrl && (
-              <div className='border-border bg-muted/40 mx-auto w-full max-w-md space-y-3 rounded-2xl border p-5'>
-                <audio controls className='w-full' src={studio.audioUrl}>
-                  {t('Your browser does not support audio playback.')}
-                </audio>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='sm'
-                  className='border-border bg-muted/50 text-foreground'
-                  disabled={downloading === 'speech'}
-                  onClick={() =>
-                    void downloadMedia(studio.audioUrl, 'speech', 'audio')
+
+            {!showProgress &&
+              props.modality === 'video' &&
+              studio.video &&
+              videoTask.ready && (
+                <GenerationMediaResult className='max-w-3xl'>
+                  <div className='border-border/80 overflow-hidden rounded-2xl border bg-black shadow-sm'>
+                    <video
+                      controls
+                      autoPlay
+                      className='aspect-video w-full'
+                      src={videoTask.resultUrl}
+                    >
+                      {t('Your browser does not support video playback.')}
+                    </video>
+                  </div>
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    className='border-border bg-muted/50 text-foreground'
+                    disabled={downloading === videoFilename}
+                    onClick={() =>
+                      void downloadMedia(
+                        videoTask.resultUrl,
+                        videoFilename,
+                        'video'
+                      )
+                    }
+                  >
+                    {downloadIcon(videoFilename)}
+                    {downloadLabel(videoFilename, t('Download video'))}
+                  </Button>
+                </GenerationMediaResult>
+              )}
+
+            {props.modality === 'video' &&
+              studio.video &&
+              videoTask.failed && (
+                <GenerationErrorState
+                  message={
+                    videoTask.failReason || t('Video generation failed.')
                   }
-                >
-                  {downloading === 'speech' ? (
-                    <Loader2 className='size-4 animate-spin' />
-                  ) : (
-                    <Download className='size-4' />
-                  )}
-                  {t('Download audio')}
-                </Button>
-              </div>
-            )}
-            {isPending && (
-              <div className='text-muted-foreground flex items-center justify-center gap-2 py-16 text-sm'>
-                <Loader2 className='text-primary size-4 animate-spin' />
-                {t('Generating…')}
-              </div>
-            )}
-            {error && (
-              <div className='py-12 text-center' role='alert'>
-                <p className='text-sm text-pretty text-red-400'>
-                  {error.message || t('Generation failed.')}
-                </p>
-                <Button
-                  className='border-border bg-muted/50 text-foreground mt-3'
-                  size='sm'
-                  variant='outline'
-                  onClick={() => submit(lastPrompt)}
-                  disabled={!lastPrompt}
-                >
-                  {t('Try again')}
-                </Button>
-              </div>
+                  onRetry={() => submit(lastPrompt)}
+                  retryDisabled={!lastPrompt}
+                />
+              )}
+
+            {!showProgress &&
+              props.modality === 'audio' &&
+              studio.audioUrl && (
+                <GenerationMediaResult className='max-w-md'>
+                  <div className='border-border/80 bg-muted/40 space-y-4 rounded-2xl border p-5 shadow-sm'>
+                    <div className='from-primary/10 via-muted/40 to-muted/20 rounded-xl bg-gradient-to-br px-4 py-6'>
+                      <audio
+                        controls
+                        autoPlay
+                        className='w-full'
+                        src={studio.audioUrl}
+                      >
+                        {t('Your browser does not support audio playback.')}
+                      </audio>
+                    </div>
+                    <Button
+                      type='button'
+                      variant='outline'
+                      size='sm'
+                      className='border-border bg-muted/50 text-foreground'
+                      disabled={downloading === 'speech'}
+                      onClick={() =>
+                        void downloadMedia(studio.audioUrl, 'speech', 'audio')
+                      }
+                    >
+                      {downloadIcon('speech')}
+                      {downloadLabel('speech', t('Download audio'))}
+                    </Button>
+                  </div>
+                </GenerationMediaResult>
+              )}
+
+            {error && !showProgress && (
+              <GenerationErrorState
+                message={error.message || t('Generation failed.')}
+                onRetry={() => submit(lastPrompt)}
+                retryDisabled={!lastPrompt}
+              />
             )}
           </section>
         </div>
       </div>
 
-      <GenerationComposer
-        modality={props.modality}
-        pricingModel={props.pricingModel}
-        isPending={isPending}
-        reference={reference}
-        onReferenceChange={setReference}
-        onSubmit={submit}
-      />
+      <div
+        className={cn(
+          'border-border/60 bg-background/80 shrink-0 border-t backdrop-blur-md',
+          'supports-backdrop-filter:bg-background/70'
+        )}
+      >
+        <GenerationComposer
+          modality={props.modality}
+          pricingModel={props.pricingModel}
+          isPending={showProgress}
+          reference={reference}
+          onReferenceChange={setReference}
+          onSubmit={submit}
+        />
+      </div>
     </div>
   )
 }

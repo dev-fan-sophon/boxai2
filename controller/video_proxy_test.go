@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,12 +14,26 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/service/storage"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
+
+func serviceStorageReset() {
+	storage.Reset()
+}
+
+func writeLocalPlaygroundObject(t *testing.T, root, key string, payload []byte) error {
+	t.Helper()
+	full := filepath.Join(root, filepath.FromSlash(key))
+	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+		return err
+	}
+	return os.WriteFile(full, payload, 0o640)
+}
 
 func setupVideoProxyTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -108,13 +124,33 @@ func TestVideoProxyDoesNotExposeAnotherUsersTask(t *testing.T) {
 func TestVideoProxyPrefersPersistedPlaygroundAsset(t *testing.T) {
 	db := setupVideoProxyTestDB(t)
 	require.NoError(t, db.AutoMigrate(&model.PlaygroundAsset{}, &model.PlaygroundRun{}))
+
+	root := t.TempDir()
+	t.Setenv("STORAGE_BACKEND", "local")
+	t.Setenv("PLAYGROUND_ASSETS_DIR", root)
+	// Reset storage factory so the local backend picks up the temp dir.
+	serviceStorageReset()
+	t.Cleanup(serviceStorageReset)
+
+	payload := []byte("fake-video-bytes")
+	key := "videos/result.mp4"
+	require.NoError(t, writeLocalPlaygroundObject(t, root, key, payload))
+
 	require.NoError(t, db.Create(&model.Task{
 		TaskID:   "task_persisted_video",
 		UserId:   42,
 		Status:   model.TaskStatusSuccess,
 		Platform: constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeXai)),
 	}).Error)
-	asset := &model.PlaygroundAsset{UserId: 42, Kind: "video", StorageKey: "videos/result.mp4"}
+	asset := &model.PlaygroundAsset{
+		UserId:     42,
+		Kind:       "video",
+		Name:       "result.mp4",
+		StorageKey: key,
+		Backend:    "local",
+		Mime:       "video/mp4",
+		Size:       int64(len(payload)),
+	}
 	require.NoError(t, db.Create(asset).Error)
 	require.NoError(t, db.Create(&model.PlaygroundRun{
 		UserId:   42,
@@ -128,12 +164,23 @@ func TestVideoProxyPrefersPersistedPlaygroundAsset(t *testing.T) {
 		c.Set("id", 42)
 		VideoProxy(c)
 	})
+
+	// Inline stream (same-origin body for playback)
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/v1/videos/task_persisted_video/content", nil)
 	router.ServeHTTP(recorder, request)
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Equal(t, "video/mp4", recorder.Header().Get("Content-Type"))
+	assert.Empty(t, recorder.Header().Get("Location"))
+	assert.Equal(t, payload, recorder.Body.Bytes())
 
-	assert.Equal(t, http.StatusFound, recorder.Code)
-	assert.Equal(t, fmt.Sprintf("/api/playground/assets/%d/content", asset.Id), recorder.Header().Get("Location"))
+	// Attachment stream for browser download
+	downloadRecorder := httptest.NewRecorder()
+	downloadReq := httptest.NewRequest(http.MethodGet, "/v1/videos/task_persisted_video/content?download=1", nil)
+	router.ServeHTTP(downloadRecorder, downloadReq)
+	assert.Equal(t, http.StatusOK, downloadRecorder.Code)
+	assert.Contains(t, downloadRecorder.Header().Get("Content-Disposition"), "attachment")
+	assert.Equal(t, payload, downloadRecorder.Body.Bytes())
 }
 
 func TestCopyVideoResponseHeadersExcludesCookies(t *testing.T) {

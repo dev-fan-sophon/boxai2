@@ -170,9 +170,34 @@ R2_PUBLIC_BASE_URL=https://assets.you-box.com
 R2_PRESIGN_TTL=600
 ```
 
-Private objects (`uploads/`, `outputs/`) are served via short-lived presigned
-GET URLs; only explicitly published objects are copied under `public/` and
-served through the `assets.you-box.com` CDN.
+**Delivery model (CORS-safe):**
+
+- **Private** objects (`uploads/`, `outputs/`) are always streamed
+  same-origin through `GET /api/playground/assets/:id/content` (and video via
+  `/v1/videos/:task_id/content`). The app opens R2 server-side; browsers never
+  follow a cross-origin presign redirect for private media. Use
+  `?download=1` for `Content-Disposition: attachment`.
+- **Public** objects are copied under `public/` and served from
+  `https://assets.you-box.com` (CDN). That custom domain should allow
+  `GET`/`HEAD` from `https://you-box.com` (and `www`) via R2/custom-domain CORS.
+- **Bucket CORS** on `boxai-playground` should allow `GET`/`HEAD` from
+  `https://you-box.com` and `https://www.you-box.com` for residual presigned
+  URL use (ops tooling / future opt-in). The production S3 token
+  (`boxai-playground-s3`) is object-scoped and **cannot** call
+  `PutBucketCors`; apply CORS with the Cloudflare dashboard or the
+  account-level `xiaoqq-full-control` API token:
+
+```bash
+# Option A — Cloudflare API (account token with R2 admin), JSON body:
+# PUT /accounts/<account_id>/r2/buckets/boxai-playground/cors
+#
+# Option B — on a host with admin R2 credentials that include bucket CORS:
+set -a; source /opt/boxai/.env; set +a   # or export R2_* another way
+python3 scripts/r2-put-cors.py           # S3 XML PutBucketCors helper
+```
+
+`assets.you-box.com` already returns `Access-Control-Allow-Origin:
+https://you-box.com` for browser `Origin` requests (public CDN path).
 
 **Migrating legacy local assets to R2:** after switching `STORAGE_BACKEND` to
 `r2`, migrate objects previously written to the local filesystem with the
