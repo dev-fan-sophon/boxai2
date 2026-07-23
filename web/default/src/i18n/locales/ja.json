@@ -1625,6 +1625,7 @@
     "Download": "ダウンロード",
     "Download a starter SKILL.md with base URL placeholders and playground endpoint map.": "ベース URL のプレースホルダーと playground エンドポイントマップを含む SKILL.md スターターをダウンロードします。",
     "Download audio": "音声をダウンロード",
+    "Download failed": "ダウンロードに失敗しました",
     "Download QR code": "QRコードをダウンロード",
     "Download SKILL.md": "SKILL.md をダウンロード",
     "Download starter skills and client snippets for quick integration.": "Download starter skills and client snippets for quick integration.",

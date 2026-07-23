@@ -38,14 +38,17 @@ var playgroundVideoMimes = map[string]bool{
 }
 
 var playgroundAudioMimes = map[string]bool{
-	"audio/mpeg":  true,
-	"audio/mp3":   true,
-	"audio/wav":   true,
-	"audio/x-wav": true,
-	"audio/webm":  true,
-	"audio/ogg":   true,
-	"audio/mp4":   true,
-	"audio/m4a":   true,
+	"audio/aac":    true,
+	"audio/flac":   true,
+	"audio/x-flac": true,
+	"audio/mpeg":   true,
+	"audio/mp3":    true,
+	"audio/wav":    true,
+	"audio/x-wav":  true,
+	"audio/webm":   true,
+	"audio/ogg":    true,
+	"audio/mp4":    true,
+	"audio/m4a":    true,
 }
 
 // PlaygroundAssetsRoot returns the absolute directory for the local storage
@@ -67,6 +70,10 @@ func NormalizePlaygroundMime(mimeType string) string {
 		return "audio/mpeg"
 	case "audio/x-wav":
 		return "audio/wav"
+	case "audio/wave":
+		return "audio/wav"
+	case "audio/x-flac":
+		return "audio/flac"
 	default:
 		return mimeType
 	}
@@ -101,25 +108,13 @@ func SniffPlaygroundMime(header []byte, declared string) (mimeType string, kind 
 	sniffed = NormalizePlaygroundMime(sniffed)
 	declared = NormalizePlaygroundMime(declared)
 
+	if detectedMime, detectedKind, ok := sniffPlaygroundContainer(header, declared); ok {
+		return detectedMime, detectedKind, nil
+	}
+
 	// Prefer sniffed when it is allowlisted
 	if k, e := DetectPlaygroundAssetKind(sniffed); e == nil {
 		return sniffed, k, nil
-	}
-
-	// DetectContentType often returns application/octet-stream for webp/wav/etc.
-	// Only then may we fall back to a declared allowlisted type.
-	if sniffed == "application/octet-stream" || sniffed == "text/plain" {
-		if k, e := DetectPlaygroundAssetKind(declared); e == nil {
-			return declared, k, nil
-		}
-		// magic for webp: RIFF....WEBP
-		if len(header) >= 12 && string(header[0:4]) == "RIFF" && string(header[8:12]) == "WEBP" {
-			return "image/webp", "image", nil
-		}
-		// wav: RIFF....WAVE
-		if len(header) >= 12 && string(header[0:4]) == "RIFF" && string(header[8:12]) == "WAVE" {
-			return "audio/wav", "audio", nil
-		}
 	}
 
 	// If declared is allowlisted and sniff is a compatible family (e.g. image/*)
@@ -137,6 +132,54 @@ func SniffPlaygroundMime(header []byte, declared string) (mimeType string, kind 
 	}
 
 	return "", "", fmt.Errorf("unsupported or unrecognizable file type (sniffed %s, declared %s)", sniffed, declared)
+}
+
+func sniffPlaygroundContainer(header []byte, declared string) (string, string, bool) {
+	if len(header) >= 12 && bytes.Equal(header[0:4], []byte("RIFF")) {
+		switch string(header[8:12]) {
+		case "WEBP":
+			return "image/webp", "image", true
+		case "WAVE":
+			return "audio/wav", "audio", true
+		}
+	}
+	if len(header) >= 4 && bytes.Equal(header[0:4], []byte("OggS")) {
+		return "audio/ogg", "audio", true
+	}
+	if len(header) >= 4 && bytes.Equal(header[0:4], []byte("fLaC")) {
+		return "audio/flac", "audio", true
+	}
+	if len(header) >= 2 && header[0] == 0xff && header[1]&0xf6 == 0xf0 {
+		return "audio/aac", "audio", true
+	}
+	if len(header) >= 3 && bytes.Equal(header[0:3], []byte("ID3")) ||
+		len(header) >= 2 && header[0] == 0xff && header[1]&0xe0 == 0xe0 {
+		return "audio/mpeg", "audio", true
+	}
+	if len(header) >= 4 && bytes.Equal(header[0:4], []byte{0x1a, 0x45, 0xdf, 0xa3}) {
+		if declared == "audio/webm" {
+			return "audio/webm", "audio", true
+		}
+		return "video/webm", "video", true
+	}
+	if len(header) >= 12 && bytes.Equal(header[4:8], []byte("ftyp")) {
+		brand := string(header[8:12])
+		if declared == "audio/mp4" || declared == "audio/m4a" || strings.HasPrefix(brand, "M4A") {
+			return declaredAudioMP4Mime(declared), "audio", true
+		}
+		if declared == "video/quicktime" || brand == "qt  " {
+			return "video/quicktime", "video", true
+		}
+		return "video/mp4", "video", true
+	}
+	return "", "", false
+}
+
+func declaredAudioMP4Mime(declared string) string {
+	if declared == "audio/m4a" {
+		return declared
+	}
+	return "audio/mp4"
 }
 
 // MaxBytesForPlaygroundKind returns the upload size cap for a kind.
@@ -199,8 +242,11 @@ func SavePlaygroundAssetFile(userId int, originalName, declaredMime string, r io
 // OpenPlaygroundAssetContent resolves an asset for delivery. When the backend
 // supports presigned URLs (R2) it returns a redirect URL; otherwise it returns
 // a reader for streaming (local). Exactly one of redirectURL/body is non-empty.
-func OpenPlaygroundAssetContent(ctx context.Context, storageKey string, ttl time.Duration) (redirectURL string, body io.ReadCloser, err error) {
-	store := storage.Default()
+func OpenPlaygroundAssetContent(ctx context.Context, backend, storageKey string, ttl time.Duration) (redirectURL string, body io.ReadCloser, err error) {
+	store, err := storage.ForBackend(backend)
+	if err != nil {
+		return "", nil, err
+	}
 	url, perr := store.PresignGet(ctx, storageKey, ttl)
 	if perr == nil {
 		return url, nil, nil
@@ -215,12 +261,23 @@ func OpenPlaygroundAssetContent(ctx context.Context, storageKey string, ttl time
 	return "", rc, nil
 }
 
+func OpenPlaygroundAssetContentDirect(ctx context.Context, backend, storageKey string) (io.ReadCloser, error) {
+	store, err := storage.ForBackend(backend)
+	if err != nil {
+		return nil, err
+	}
+	return store.Open(ctx, storageKey)
+}
+
 // PublishPlaygroundAssetObject copies a stored object to a public ("public/")
 // key so it can be delivered via the public CDN. Returns the public key and,
 // when the backend exposes a CDN, the public URL. For the local backend the
 // URL is empty (no public CDN); callers fall back to the app content route.
-func PublishPlaygroundAssetObject(ctx context.Context, userId int, storageKey, mimeType string, size int64) (publicKey string, publicURL string, err error) {
-	store := storage.Default()
+func PublishPlaygroundAssetObject(ctx context.Context, userId int, backend, storageKey, mimeType string, size int64) (publicKey string, publicURL string, err error) {
+	store, err := storage.ForBackend(backend)
+	if err != nil {
+		return "", "", err
+	}
 	publicKey = path.Join("public", fmt.Sprintf("%d", userId), path.Base(storageKey))
 	rc, err := store.Open(ctx, storageKey)
 	if err != nil {
@@ -237,11 +294,14 @@ func PublishPlaygroundAssetObject(ctx context.Context, userId int, storageKey, m
 }
 
 // UnpublishPlaygroundAssetObject removes a previously published public object.
-func UnpublishPlaygroundAssetObject(ctx context.Context, publicKey string) {
+func UnpublishPlaygroundAssetObject(ctx context.Context, backend, publicKey string) {
 	if publicKey == "" {
 		return
 	}
-	_ = storage.Default().Delete(ctx, publicKey)
+	store, err := storage.ForBackend(backend)
+	if err == nil {
+		_ = store.Delete(ctx, publicKey)
+	}
 }
 
 // ResolvePlaygroundAssetPath maps a storage key to a local absolute path. Only
@@ -264,8 +324,11 @@ func ResolvePlaygroundAssetPath(storageKey string) (string, error) {
 }
 
 // DeletePlaygroundAssetFile removes the stored object if it exists.
-func DeletePlaygroundAssetFile(storageKey string) {
-	_ = storage.Default().Delete(context.Background(), storageKey)
+func DeletePlaygroundAssetFile(backend, storageKey string) {
+	store, err := storage.ForBackend(backend)
+	if err == nil {
+		_ = store.Delete(context.Background(), storageKey)
+	}
 }
 
 func safeExtFromName(name, mimeType string) string {
@@ -280,7 +343,7 @@ func safeExtFromName(name, mimeType string) string {
 	switch ext {
 	case ".jpg", ".jpeg", ".png", ".webp", ".gif",
 		".mp4", ".webm", ".mov",
-		".mp3", ".wav", ".ogg", ".m4a", ".mpeg":
+		".mp3", ".wav", ".ogg", ".m4a", ".mpeg", ".aac", ".flac":
 		return ext
 	default:
 		return ".bin"

@@ -46,6 +46,17 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 	if normalized != "" {
 		return normalized
 	}
+	normalizedModel := strings.ToLower(strings.TrimSpace(modelName))
+	if strings.HasPrefix(normalizedModel, "grok-imagine-video") {
+		return string(constant.EndpointTypeOpenAIVideo)
+	}
+	if strings.HasPrefix(normalizedModel, "gpt-image-") ||
+		strings.HasPrefix(normalizedModel, "chatgpt-image-") ||
+		normalizedModel == "grok-imagine" ||
+		strings.HasPrefix(normalizedModel, "grok-imagine-image") ||
+		normalizedModel == "grok-imagine-edit" {
+		return string(constant.EndpointTypeImageGeneration)
+	}
 	if strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix) {
 		return string(constant.EndpointTypeOpenAIResponseCompact)
 	}
@@ -111,6 +122,14 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 
 	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
+	if strings.EqualFold(strings.TrimSpace(testModel), "grok-imagine-edit") {
+		return testResult{localErr: fmt.Errorf("image editing channel test is not supported; submit a canary edit request instead")}
+	}
+	if constant.EndpointType(endpointType) == constant.EndpointTypeOpenAIVideo {
+		return testResult{
+			localErr: fmt.Errorf("asynchronous video channel test is not supported; submit a canary video task instead"),
+		}
+	}
 
 	requestPath := "/v1/chat/completions"
 

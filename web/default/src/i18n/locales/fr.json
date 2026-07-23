@@ -1625,6 +1625,7 @@
     "Download": "Télécharger",
     "Download a starter SKILL.md with base URL placeholders and playground endpoint map.": "Téléchargez un SKILL.md de départ avec des emplacements réservés pour l'URL de base et la carte des endpoints du playground.",
     "Download audio": "Télécharger l’audio",
+    "Download failed": "Échec du téléchargement",
     "Download QR code": "Télécharger le code QR",
     "Download SKILL.md": "Télécharger SKILL.md",
     "Download starter skills and client snippets for quick integration.": "Download starter skills and client snippets for quick integration.",

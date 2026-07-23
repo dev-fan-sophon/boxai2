@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -31,6 +32,10 @@ type TaskPollingAdaptor interface {
 	// AdjustBillingOnComplete 在任务到达终态（成功/失败）时由轮询循环调用。
 	// 返回正数触发差额结算（补扣/退还），返回 0 保持预扣费金额不变。
 	AdjustBillingOnComplete(task *model.Task, taskResult *relaycommon.TaskInfo) int
+}
+
+type contextTaskPollingAdaptor interface {
+	FetchTaskWithContext(ctx context.Context, baseURL string, key string, body map[string]any, proxy string) (*http.Response, error)
 }
 
 // GetTaskAdaptorFunc 由 main 包注入，用于获取指定平台的任务适配器。
@@ -104,11 +109,12 @@ type TaskPollSummary struct {
 // adaptor factory has not been wired yet, to avoid a nil call during startup.
 func RunTaskPollingOnce(ctx context.Context, report func(processed, total int)) TaskPollSummary {
 	summary := TaskPollSummary{}
-	if GetTaskAdaptorFunc == nil {
-		return summary
-	}
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	reconcilePlaygroundVideoOutputs(ctx, 10)
+	if GetTaskAdaptorFunc == nil {
+		return summary
 	}
 
 	common.SysLog("任务进度轮询开始")
@@ -462,7 +468,8 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return fmt.Errorf("readAll failed for task %s: %w", taskId, err)
 	}
 
-	logger.LogDebug(ctx, "updateVideoSingleTask response: %s", responseBody)
+	redactedResponseBody := redactVideoResponseBody(responseBody, task.Platform)
+	logger.LogDebug(ctx, "updateVideoSingleTask response: %s", redactedResponseBody)
 
 	snap := task.Snapshot()
 
@@ -470,7 +477,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	// try parse as New API response format
 	var responseItems dto.TaskResponse[model.Task]
 	if err = common.Unmarshal(responseBody, &responseItems); err == nil && responseItems.IsSuccess() {
-		logger.LogDebug(ctx, "updateVideoSingleTask parsed as new api response format: %+v", responseItems)
+		logger.LogDebug(ctx, "updateVideoSingleTask parsed as new api response format for task %s", taskId)
 		t := responseItems.Data
 		taskResult.TaskID = t.TaskID
 		taskResult.Status = string(t.Status)
@@ -482,9 +489,9 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		return fmt.Errorf("parseTaskResult failed for task %s: %w", taskId, err)
 	}
 
-	task.Data = redactVideoResponseBody(responseBody)
+	task.Data = redactedResponseBody
 
-	logger.LogDebug(ctx, "updateVideoSingleTask taskResult: %+v", taskResult)
+	logger.LogDebug(ctx, "updateVideoSingleTask task %s status=%s progress=%s", taskId, taskResult.Status, taskResult.Progress)
 
 	now := time.Now().Unix()
 	if taskResult.Status == "" {
@@ -533,6 +540,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 		if strings.HasPrefix(taskResult.Url, "data:") {
 			// data: URI (e.g. Vertex base64 encoded video) — keep in Data, not in ResultURL
 			task.PrivateData.ResultURL = taskcommon.BuildProxyURL(task.TaskID)
+			directVideoURL = taskResult.Url
 		} else if taskResult.Url != "" {
 			// Direct upstream URL (e.g. Kling, Ali, Doubao, etc.)
 			task.PrivateData.ResultURL = taskResult.Url
@@ -592,7 +600,7 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 	// shouldSettle stays true only when this poll won the success transition,
 	// so it also gates one-time output persistence for linked playground runs.
 	if shouldSettle && directVideoURL != "" {
-		persistPlaygroundVideoOutput(task.TaskID, directVideoURL)
+		persistPlaygroundVideoOutput(task.TaskID, task.UserId, directVideoURL)
 	}
 
 	return nil
@@ -601,37 +609,196 @@ func updateVideoSingleTask(ctx context.Context, adaptor TaskPollingAdaptor, ch *
 // persistPlaygroundVideoOutput asynchronously downloads a completed video and
 // stores it durably when the task originated from a playground run. Most tasks
 // are not playground runs, so the lookup returns quickly with no work.
-func persistPlaygroundVideoOutput(taskID, videoURL string) {
+func persistPlaygroundVideoOutput(taskID string, userID int, videoURL string) {
+	QueuePlaygroundVideoOutputReconciliation(taskID, userID, videoURL)
+}
+
+// QueuePlaygroundVideoOutputReconciliation performs an immediate best-effort
+// attempt. The polling-cycle reconciler retries durable unpersisted runs.
+func QueuePlaygroundVideoOutputReconciliation(taskID string, userID int, videoURL string) {
 	gopool.Go(func() {
-		run, err := model.GetPlaygroundRunByTaskId(taskID)
+		run, err := model.GetPlaygroundRunByTaskId(taskID, userID)
 		if err != nil {
-			return // not a playground task (or lookup failed) — nothing to persist
-		}
-		if run.AssetId != 0 {
-			return // already persisted
-		}
-		asset, err := PersistPlaygroundOutput(context.Background(), run.UserId, "video", videoURL)
-		if err != nil {
-			common.SysError(fmt.Sprintf("persist playground video for task %s: %v", taskID, err))
 			return
 		}
-		if asset == nil {
-			return
-		}
-		contentURL := fmt.Sprintf("/api/playground/assets/%d/content", asset.Id)
-		if err := model.DB.Model(asset).Update("url", contentURL).Error; err != nil {
-			common.SysError("update playground video asset url: " + err.Error())
-		}
-		if err := model.UpdatePlaygroundRunResult(run.Id, asset.Id, contentURL); err != nil {
-			common.SysError("update playground run result: " + err.Error())
+		task, exists, err := model.GetByTaskId(userID, taskID)
+		if err == nil && exists {
+			persistPlaygroundVideoRun(context.Background(), run, task, videoURL)
 		}
 	})
 }
 
-func redactVideoResponseBody(body []byte) []byte {
+func reconcilePlaygroundVideoOutputs(ctx context.Context, limit int) {
+	afterID := 0
+	for {
+		runs, err := model.ListUnpersistedSuccessfulVideoRuns(afterID, limit)
+		if err != nil {
+			common.SysError("list unpersisted playground video runs: " + err.Error())
+			return
+		}
+		if len(runs) == 0 {
+			return
+		}
+		for i := range runs {
+			if ctx.Err() != nil {
+				return
+			}
+			run := &runs[i]
+			afterID = run.Id
+			task, exists, err := model.GetByTaskId(run.UserId, run.TaskId)
+			if err != nil || !exists || task.Status != model.TaskStatusSuccess {
+				continue
+			}
+			persistPlaygroundVideoRun(ctx, run, task, "")
+		}
+	}
+}
+
+func persistPlaygroundVideoRun(ctx context.Context, run *model.PlaygroundRun, task *model.Task, preferredURL string) {
+	if run == nil || task == nil || run.AssetId != 0 {
+		return
+	}
+	videoURL := strings.TrimSpace(preferredURL)
+	if videoURL == "" {
+		videoURL = strings.TrimSpace(task.GetResultURL())
+	}
+	var asset *model.PlaygroundAsset
+	var err error
+	if videoURL != "" && !strings.Contains(videoURL, "/v1/videos/"+task.TaskID+"/content") {
+		asset, err = PersistPlaygroundOutput(ctx, run.UserId, "video", videoURL)
+	} else {
+		asset, err = persistProviderVideoOutput(ctx, run.UserId, task)
+	}
+	if err != nil {
+		common.SysError(fmt.Sprintf("persist playground video for task %s: %v", run.TaskId, err))
+		return
+	}
+	if asset == nil {
+		return
+	}
+	contentURL := fmt.Sprintf("/api/playground/assets/%d/content", asset.Id)
+	if err := model.DB.Model(asset).Update("url", contentURL).Error; err != nil {
+		common.SysError("update playground video asset url: " + err.Error())
+		DeletePlaygroundAssetFile(asset.Backend, asset.StorageKey)
+		_ = model.DeletePlaygroundAsset(asset.Id, run.UserId)
+		return
+	}
+	if err := model.UpdatePlaygroundRunResult(run.Id, run.UserId, asset.Id, contentURL); err != nil {
+		// Another reconciler may have won the asset_id=0 CAS.
+		DeletePlaygroundAssetFile(asset.Backend, asset.StorageKey)
+		_ = model.DeletePlaygroundAsset(asset.Id, run.UserId)
+	}
+}
+
+func persistProviderVideoOutput(ctx context.Context, userID int, task *model.Task) (*model.PlaygroundAsset, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	channel, err := model.CacheGetChannel(task.ChannelId)
+	if err != nil {
+		return nil, err
+	}
+	key := strings.TrimSpace(task.PrivateData.Key)
+	if key == "" {
+		key = channel.Key
+	}
+	baseURL := strings.TrimRight(channel.GetBaseURL(), "/")
+	if baseURL == "" {
+		baseURL = strings.TrimRight(constant.ChannelBaseURLs[channel.Type], "/")
+	}
+	if channel.Type == constant.ChannelTypeOpenAI || channel.Type == constant.ChannelTypeSora {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/v1/videos/%s/content", baseURL, task.GetUpstreamTaskID()), nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+key)
+		client := GetHttpClient()
+		if proxy := channel.GetSetting().Proxy; proxy != "" {
+			client, err = GetHttpClientWithProxy(proxy)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return PersistPlaygroundOutputRequest(ctx, userID, "video", req, client)
+	}
+
+	if GetTaskAdaptorFunc == nil {
+		return nil, fmt.Errorf("task adaptor is not initialized")
+	}
+	adaptor := GetTaskAdaptorFunc(task.Platform)
+	if adaptor == nil {
+		return nil, fmt.Errorf("task adaptor is not available")
+	}
+	contextAdaptor, ok := adaptor.(contextTaskPollingAdaptor)
+	if !ok {
+		return nil, fmt.Errorf("task adaptor does not support bounded reconciliation fetch")
+	}
+	resp, err := contextAdaptor.FetchTaskWithContext(ctx, baseURL, key, map[string]any{
+		"task_id": task.GetUpstreamTaskID(),
+		"action":  task.Action,
+	}, channel.GetSetting().Proxy)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, PlaygroundAssetMaxVideoBytes+1024*1024))
+	if err != nil {
+		return nil, err
+	}
+	info, err := adaptor.ParseTaskResult(body)
+	if err != nil || info == nil {
+		return nil, fmt.Errorf("parse completed video task failed: %w", err)
+	}
+	resultURL := strings.TrimSpace(info.Url)
+	if resultURL == "" {
+		resultURL = strings.TrimSpace(info.RemoteUrl)
+		if resultURL != "" && channel.Type == constant.ChannelTypeGemini {
+			parsed, parseErr := url.Parse(resultURL)
+			if parseErr != nil {
+				return nil, parseErr
+			}
+			query := parsed.Query()
+			query.Set("key", key)
+			parsed.RawQuery = query.Encode()
+			resultURL = parsed.String()
+		}
+	}
+	if resultURL == "" {
+		return nil, fmt.Errorf("completed video task has no media result")
+	}
+	return PersistPlaygroundOutput(ctx, userID, "video", resultURL)
+}
+
+func redactVideoResponseBody(body []byte, platform constant.TaskPlatform) []byte {
+	isXAI := platform == constant.TaskPlatform(fmt.Sprintf("%d", constant.ChannelTypeXai))
 	var m map[string]any
 	if err := common.Unmarshal(body, &m); err != nil {
+		if isXAI {
+			return []byte(`{"redacted":true}`)
+		}
 		return body
+	}
+	if isXAI {
+		safe := map[string]any{"redacted": true}
+		if status, ok := m["status"].(string); ok {
+			safe["status"] = status
+		}
+		if video, ok := m["video"].(map[string]any); ok {
+			safeVideo := map[string]any{}
+			if duration, ok := video["duration"]; ok {
+				safeVideo["duration"] = duration
+			}
+			if respectModeration, ok := video["respect_moderation"]; ok {
+				safeVideo["respect_moderation"] = respectModeration
+			}
+			if len(safeVideo) > 0 {
+				safe["video"] = safeVideo
+			}
+		}
+		b, err := common.Marshal(safe)
+		if err != nil {
+			return []byte(`{"redacted":true}`)
+		}
+		return b
 	}
 	resp, _ := m["response"].(map[string]any)
 	if resp != nil {
@@ -649,7 +816,7 @@ func redactVideoResponseBody(body []byte) []byte {
 	}
 	b, err := common.Marshal(m)
 	if err != nil {
-		return body
+		return nil
 	}
 	return b
 }

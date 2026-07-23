@@ -150,6 +150,7 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	if platform == "" {
 		platform = GetTaskPlatform(c)
 	}
+	platform = taskPlatformForModel(platform, info.OriginModelName)
 	adaptor := GetTaskAdaptor(platform)
 	if adaptor == nil {
 		return nil, service.TaskErrorWrapperLocal(fmt.Errorf("invalid api platform: %s", platform), "invalid_api_platform", http.StatusBadRequest)
@@ -170,6 +171,20 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 	info.UpstreamModelName = modelName
 	if err := helper.ModelMappedHelper(c, info, nil); err != nil {
 		return nil, service.TaskErrorWrapperLocal(err, "model_mapping_failed", http.StatusBadRequest)
+	}
+	mappedPlatform := taskPlatformForModel(platform, info.UpstreamModelName)
+	if mappedPlatform != platform {
+		platform = mappedPlatform
+		adaptor = GetTaskAdaptor(platform)
+		if adaptor == nil {
+			return nil, service.TaskErrorWrapperLocal(fmt.Errorf("invalid api platform: %s", platform), "invalid_api_platform", http.StatusBadRequest)
+		}
+		adaptor.Init(info)
+	}
+	if validator, ok := adaptor.(channel.MappedTaskRequestValidator); ok {
+		if taskErr := validator.ValidateMappedRequest(c, info); taskErr != nil {
+			return nil, taskErr
+		}
 	}
 
 	// 3. 预生成公开 task ID（仅首次）
@@ -257,6 +272,13 @@ func RelayTaskSubmit(c *gin.Context, info *relaycommon.RelayInfo) (*TaskSubmitRe
 		Platform:       platform,
 		Quota:          finalQuota,
 	}, nil
+}
+
+func taskPlatformForModel(platform constant.TaskPlatform, modelName string) constant.TaskPlatform {
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(modelName)), "grok-imagine-video") {
+		return constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeXai))
+	}
+	return platform
 }
 
 // recalcQuotaFromRatios 根据 adjustedRatios 重新计算 quota。
@@ -499,7 +521,7 @@ func tryRealtimeFetch(task *model.Task, isOpenAIVideoAPI bool) []byte {
 		"metadata": nil,
 		"status":   mapTaskStatusToSimple(task.Status),
 		"task_id":  task.TaskID,
-		"url":      task.GetResultURL(),
+		"url":      publicTaskResultURL(task),
 	}
 	respBody, _ := common.Marshal(dto.TaskResponse[any]{
 		Code: "success",
@@ -548,6 +570,10 @@ func mapTaskStatusToSimple(status model.TaskStatus) string {
 }
 
 func TaskModel2Dto(task *model.Task) *dto.TaskDto {
+	data := task.Data
+	if task.Platform == constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeXai)) {
+		data = nil
+	}
 	return &dto.TaskDto{
 		ID:         task.ID,
 		CreatedAt:  task.CreatedAt,
@@ -561,13 +587,23 @@ func TaskModel2Dto(task *model.Task) *dto.TaskDto {
 		Action:     task.Action,
 		Status:     string(task.Status),
 		FailReason: task.FailReason,
-		ResultURL:  task.GetResultURL(),
+		ResultURL:  publicTaskResultURL(task),
 		SubmitTime: task.SubmitTime,
 		StartTime:  task.StartTime,
 		FinishTime: task.FinishTime,
 		Progress:   task.Progress,
 		Properties: task.Properties,
 		Username:   task.Username,
-		Data:       task.Data,
+		Data:       data,
 	}
+}
+
+func publicTaskResultURL(task *model.Task) string {
+	if task.Platform != constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeXai)) {
+		return task.GetResultURL()
+	}
+	if task.Status != model.TaskStatusSuccess || task.PrivateData.ResultURL == "" {
+		return ""
+	}
+	return taskcommon.BuildProxyURL(task.TaskID)
 }

@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
@@ -54,7 +57,7 @@ func UploadPlaygroundAsset(c *gin.Context) {
 		return
 	}
 	if wantKind != "" && wantKind != kind {
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiErrorMsg(c, "file kind does not match requested kind")
 		return
 	}
@@ -68,12 +71,53 @@ func UploadPlaygroundAsset(c *gin.Context) {
 		Size:       file.Size,
 	}
 	if err := model.CreatePlaygroundAsset(asset); err != nil {
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiError(c, err)
 		return
 	}
 	asset.URL = playgroundAssetContentURL(asset.Id)
 	_ = model.DB.Model(asset).Update("url", asset.URL).Error
+	common.ApiSuccess(c, model.PublicPlaygroundAssetDTO(asset))
+}
+
+func ImportPlaygroundAsset(c *gin.Context) {
+	userId := c.GetInt("id")
+	var body struct {
+		SourceURL string `json:"source_url"`
+		Kind      string `json:"kind"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	body.Kind = strings.TrimSpace(body.Kind)
+	if body.Kind != "image" && body.Kind != "video" && body.Kind != "audio" {
+		common.ApiErrorMsg(c, "invalid asset kind")
+		return
+	}
+	body.SourceURL = strings.TrimSpace(body.SourceURL)
+	parsedSource, err := url.Parse(body.SourceURL)
+	if err != nil || len(body.SourceURL) > 8192 || parsedSource.Host == "" ||
+		(parsedSource.Scheme != "http" && parsedSource.Scheme != "https") {
+		common.ApiErrorMsg(c, "invalid source URL")
+		return
+	}
+	asset, err := service.PersistPlaygroundOutput(c.Request.Context(), userId, body.Kind, body.SourceURL)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if asset == nil {
+		common.ApiErrorMsg(c, "source URL is not persistable")
+		return
+	}
+	asset.URL = playgroundAssetContentURL(asset.Id)
+	if err := model.DB.Model(asset).Update("url", asset.URL).Error; err != nil {
+		service.DeletePlaygroundAssetFile(asset.Backend, asset.StorageKey)
+		_ = model.DeletePlaygroundAsset(asset.Id, userId)
+		common.ApiError(c, err)
+		return
+	}
 	common.ApiSuccess(c, model.PublicPlaygroundAssetDTO(asset))
 }
 
@@ -118,8 +162,8 @@ func DeletePlaygroundAsset(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	service.DeletePlaygroundAssetFile(asset.StorageKey)
-	service.UnpublishPlaygroundAssetObject(c.Request.Context(), asset.PublicKey)
+	service.DeletePlaygroundAssetFile(asset.Backend, asset.StorageKey)
+	service.UnpublishPlaygroundAssetObject(c.Request.Context(), asset.Backend, asset.PublicKey)
 	common.ApiSuccess(c, nil)
 }
 
@@ -141,13 +185,13 @@ func PublishPlaygroundAsset(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	publicKey, publicURL, err := service.PublishPlaygroundAssetObject(c.Request.Context(), userId, asset.StorageKey, asset.Mime, asset.Size)
+	publicKey, publicURL, err := service.PublishPlaygroundAssetObject(c.Request.Context(), userId, asset.Backend, asset.StorageKey, asset.Mime, asset.Size)
 	if err != nil {
 		common.ApiError(c, err)
 		return
 	}
 	if err := model.SetPlaygroundAssetVisibility(id, userId, "public", publicKey, publicURL); err != nil {
-		service.UnpublishPlaygroundAssetObject(c.Request.Context(), publicKey)
+		service.UnpublishPlaygroundAssetObject(c.Request.Context(), asset.Backend, publicKey)
 		common.ApiError(c, err)
 		return
 	}
@@ -174,7 +218,7 @@ func UnpublishPlaygroundAsset(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	service.UnpublishPlaygroundAssetObject(c.Request.Context(), asset.PublicKey)
+	service.UnpublishPlaygroundAssetObject(c.Request.Context(), asset.Backend, asset.PublicKey)
 	if err := model.SetPlaygroundAssetVisibility(id, userId, "private", "", ""); err != nil {
 		common.ApiError(c, err)
 		return
@@ -215,7 +259,14 @@ func GetPlaygroundAssetContent(c *gin.Context) {
 		c.Status(http.StatusNotFound)
 		return
 	}
-	redirectURL, body, err := service.OpenPlaygroundAssetContent(c.Request.Context(), asset.StorageKey, 0)
+	forceDownload := c.Query("download") == "1"
+	var redirectURL string
+	var body io.ReadCloser
+	if forceDownload {
+		body, err = service.OpenPlaygroundAssetContentDirect(c.Request.Context(), asset.Backend, asset.StorageKey)
+	} else {
+		redirectURL, body, err = service.OpenPlaygroundAssetContent(c.Request.Context(), asset.Backend, asset.StorageKey, 0)
+	}
 	if err != nil {
 		c.Status(http.StatusNotFound)
 		return
@@ -229,7 +280,12 @@ func GetPlaygroundAssetContent(c *gin.Context) {
 		c.Header("Content-Type", asset.Mime)
 	}
 	c.Header("X-Content-Type-Options", "nosniff")
-	c.Header("Cache-Control", "private, max-age=3600")
+	if forceDownload {
+		c.Header("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": filepath.Base(asset.Name)}))
+		c.Header("Cache-Control", "private, no-store")
+	} else {
+		c.Header("Cache-Control", "private, max-age=3600")
+	}
 	c.Status(http.StatusOK)
 	if _, err := io.Copy(c.Writer, body); err != nil {
 		common.SysError("stream playground asset: " + err.Error())
@@ -351,7 +407,7 @@ func UploadPlaygroundUploadSessionFile(c *gin.Context) {
 		return
 	}
 	if s.Kind != "" && s.Kind != kind {
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiErrorMsg(c, "file kind does not match session")
 		return
 	}
@@ -365,7 +421,7 @@ func UploadPlaygroundUploadSessionFile(c *gin.Context) {
 		Size:       file.Size,
 	}
 	if err := model.CreatePlaygroundAsset(asset); err != nil {
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiError(c, err)
 		return
 	}
@@ -379,7 +435,7 @@ func UploadPlaygroundUploadSessionFile(c *gin.Context) {
 	if !ok {
 		// race: another upload completed first — leave orphan is bad; delete our asset
 		_ = model.DeletePlaygroundAsset(asset.Id, s.UserId)
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiErrorMsg(c, "session already used")
 		return
 	}
@@ -718,6 +774,7 @@ func CreatePlaygroundRun(c *gin.Context) {
 		Model     string `json:"model"`
 		Prompt    string `json:"prompt"`
 		ResultURL string `json:"result_url"`
+		AssetId   int    `json:"asset_id"`
 		// Quota from client is ignored — runs are not a billing ledger
 		Quota  int    `json:"quota"`
 		TaskId string `json:"task_id"`
@@ -735,28 +792,62 @@ func CreatePlaygroundRun(c *gin.Context) {
 	}
 	prompt := truncateRunes(body.Prompt, 4000)
 	resultURL := allowlistedResultURL(body.ResultURL)
-	assetId := 0
-	// Persist synchronous image/audio outputs to durable storage so they
-	// survive provider URL expiry. Video results arrive asynchronously and are
-	// persisted from task polling instead.
-	if mod == "image" || mod == "audio" {
-		if asset, err := service.PersistPlaygroundOutput(c.Request.Context(), userId, mod, body.ResultURL); err != nil {
-			common.SysError("persist playground output: " + err.Error())
-		} else if asset != nil {
-			asset.URL = playgroundAssetContentURL(asset.Id)
-			if err := model.DB.Model(asset).Update("url", asset.URL).Error; err != nil {
-				common.SysError("update playground asset url: " + err.Error())
-			}
-			resultURL = asset.URL
-			assetId = asset.Id
-		}
-	}
-	if len(resultURL) > 1000 {
-		resultURL = resultURL[:1000]
+	assetId := body.AssetId
+	if assetId < 0 {
+		common.ApiErrorMsg(c, "invalid asset id")
+		return
 	}
 	taskId := strings.TrimSpace(body.TaskId)
 	if len(taskId) > 191 {
 		taskId = taskId[:191]
+	}
+	completedVideoURL := ""
+	switch mod {
+	case "image", "audio":
+		if assetId == 0 || taskId != "" {
+			common.ApiErrorMsg(c, "exactly one matching asset is required for media run")
+			return
+		}
+		asset, err := model.GetPlaygroundAsset(assetId, userId)
+		if err != nil {
+			common.ApiErrorMsg(c, "asset not found")
+			return
+		}
+		if asset.Kind != mod {
+			common.ApiErrorMsg(c, "asset kind does not match run modality")
+			return
+		}
+		resultURL = playgroundAssetContentURL(asset.Id)
+	case "video":
+		if assetId != 0 || taskId == "" {
+			common.ApiErrorMsg(c, "exactly one video task is required for video run")
+			return
+		}
+		task, exists, err := model.GetByTaskId(userId, taskId)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+		if !exists {
+			common.ApiErrorMsg(c, "task not found")
+			return
+		}
+		if task.Platform == "" || task.Platform == constant.TaskPlatformSuno || task.Platform == constant.TaskPlatformMidjourney {
+			common.ApiErrorMsg(c, "task is not a video task")
+			return
+		}
+		if task.Status == model.TaskStatusSuccess {
+			completedVideoURL = task.GetResultURL()
+		}
+		resultURL = ""
+	case "chat":
+		if assetId != 0 || taskId != "" {
+			common.ApiErrorMsg(c, "chat run cannot reference media")
+			return
+		}
+	}
+	if len(resultURL) > 1000 {
+		resultURL = resultURL[:1000]
 	}
 	run := &model.PlaygroundRun{
 		UserId:    userId,
@@ -771,6 +862,9 @@ func CreatePlaygroundRun(c *gin.Context) {
 	if err := model.CreatePlaygroundRun(run); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if completedVideoURL != "" {
+		service.QueuePlaygroundVideoOutputReconciliation(taskId, userId, completedVideoURL)
 	}
 	common.ApiSuccess(c, run)
 }
@@ -863,7 +957,7 @@ func CreatePlaygroundVoice(c *gin.Context) {
 		return
 	}
 	if kind != "audio" {
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiErrorMsg(c, "audio file required")
 		return
 	}
@@ -877,7 +971,7 @@ func CreatePlaygroundVoice(c *gin.Context) {
 		Size:       file.Size,
 	}
 	if err := model.CreatePlaygroundAsset(asset); err != nil {
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiError(c, err)
 		return
 	}
@@ -892,7 +986,7 @@ func CreatePlaygroundVoice(c *gin.Context) {
 	}
 	if err := model.CreatePlaygroundVoice(voice); err != nil {
 		_ = model.DeletePlaygroundAsset(asset.Id, userId)
-		service.DeletePlaygroundAssetFile(storageKey)
+		service.DeletePlaygroundAssetFile(backend, storageKey)
 		common.ApiError(c, err)
 		return
 	}

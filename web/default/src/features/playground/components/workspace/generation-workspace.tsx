@@ -9,6 +9,7 @@ License, or (at your option) any later version.
 import { Download, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import type { PricingModel } from '@/features/pricing/types'
@@ -16,6 +17,7 @@ import { usePlaygroundStore } from '@/stores/playground-store'
 
 import type { UseStudioResult } from '../../hooks/use-studio'
 import { useVideoTaskResult } from '../../hooks/use-video-task-result'
+import { downloadGeneratedMedia } from '../../lib/download-generated-media'
 import type { StudioModality } from '../../types'
 import type { MediaReference } from '../composer/attachments/media-reference-slot'
 import { GenerationComposer } from '../composer/generation-composer'
@@ -39,6 +41,7 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
   const { studio } = props
   const [reference, setReference] = useState<MediaReference | null>(null)
   const [referenceKey, setReferenceKey] = useState('')
+  const [downloading, setDownloading] = useState('')
 
   const model = usePlaygroundStore((state) => state.config.model)
   const group = usePlaygroundStore((state) => state.config.group)
@@ -52,8 +55,9 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
     setReference(null)
   }
 
+  const videoTaskId = studio.video?.taskId ?? ''
   const videoTask = useVideoTaskResult(
-    studio.video?.taskId,
+    videoTaskId,
     props.modality === 'video' && Boolean(studio.video)
   )
 
@@ -73,6 +77,21 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
     (props.modality === 'audio' && Boolean(studio.audioUrl))
 
   const [lastPrompt, setLastPrompt] = useState('')
+
+  const downloadMedia = async (
+    sourceUrl: string,
+    filename: string,
+    kind: 'image' | 'video' | 'audio'
+  ) => {
+    setDownloading(filename)
+    try {
+      await downloadGeneratedMedia(sourceUrl, filename, kind)
+    } catch {
+      toast.error(t('Download failed'))
+    } finally {
+      setDownloading('')
+    }
+  }
 
   const submit = (prompt: string) => {
     if (!prompt || !model) return
@@ -144,23 +163,44 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
           >
             {props.modality === 'image' && studio.images.length > 0 && (
               <div className='grid w-full grid-cols-1 gap-3 sm:grid-cols-2'>
-                {studio.images.map((image) => (
-                  <figure
-                    key={image.url}
-                    className='border-border bg-muted/60 overflow-hidden rounded-xl border'
-                  >
-                    <img
-                      src={image.url}
-                      alt={image.revisedPrompt || t('Generated image')}
-                      className='aspect-square w-full object-cover'
-                    />
-                    {image.revisedPrompt && (
-                      <figcaption className='text-muted-foreground p-2 text-xs text-pretty'>
-                        {image.revisedPrompt}
-                      </figcaption>
-                    )}
-                  </figure>
-                ))}
+                {studio.images.map((image, index) => {
+                  const filename = `generated-image-${index + 1}`
+                  return (
+                    <figure
+                      key={image.url}
+                      className='border-border bg-muted/60 overflow-hidden rounded-xl border'
+                    >
+                      <img
+                        src={image.url}
+                        alt={image.revisedPrompt || t('Generated image')}
+                        className='aspect-square w-full object-cover'
+                      />
+                      {image.revisedPrompt && (
+                        <figcaption className='text-muted-foreground p-2 text-xs text-pretty'>
+                          {image.revisedPrompt}
+                        </figcaption>
+                      )}
+                      <div className='p-2 pt-0'>
+                        <Button
+                          type='button'
+                          variant='outline'
+                          size='sm'
+                          disabled={downloading === filename}
+                          onClick={() =>
+                            void downloadMedia(image.url, filename, 'image')
+                          }
+                        >
+                          {downloading === filename ? (
+                            <Loader2 className='size-4 animate-spin' />
+                          ) : (
+                            <Download className='size-4' />
+                          )}
+                          {t('Download')}
+                        </Button>
+                      </div>
+                    </figure>
+                  )
+                })}
               </div>
             )}
             {props.modality === 'video' && studio.video && videoTask.ready && (
@@ -173,17 +213,24 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                   {t('Your browser does not support video playback.')}
                 </video>
                 <Button
-                  render={
-                    <a
-                      href={videoTask.resultUrl}
-                      download={`video-${studio.video.taskId}.mp4`}
-                    />
-                  }
+                  type='button'
                   variant='outline'
                   size='sm'
                   className='border-border bg-muted/50 text-foreground'
+                  disabled={downloading === `video-${videoTaskId}`}
+                  onClick={() =>
+                    void downloadMedia(
+                      videoTask.resultUrl,
+                      `video-${videoTaskId}`,
+                      'video'
+                    )
+                  }
                 >
-                  <Download className='size-4' />
+                  {downloading === `video-${videoTaskId}` ? (
+                    <Loader2 className='size-4 animate-spin' />
+                  ) : (
+                    <Download className='size-4' />
+                  )}
                   {t('Download video')}
                 </Button>
               </div>
@@ -232,17 +279,20 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                   {t('Your browser does not support audio playback.')}
                 </audio>
                 <Button
-                  render={
-                    <a
-                      href={studio.audioUrl}
-                      download={`speech.${studio.settings.audioFormat}`}
-                    />
-                  }
+                  type='button'
                   variant='outline'
                   size='sm'
                   className='border-border bg-muted/50 text-foreground'
+                  disabled={downloading === 'speech'}
+                  onClick={() =>
+                    void downloadMedia(studio.audioUrl, 'speech', 'audio')
+                  }
                 >
-                  <Download className='size-4' />
+                  {downloading === 'speech' ? (
+                    <Loader2 className='size-4 animate-spin' />
+                  ) : (
+                    <Download className='size-4' />
+                  )}
                   {t('Download audio')}
                 </Button>
               </div>

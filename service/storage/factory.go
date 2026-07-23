@@ -51,12 +51,10 @@ func NewR2Store() (AssetStore, error) {
 }
 
 // ForBackend resolves the backend recorded with a persisted object. An empty
-// backend is treated as a legacy row and uses the current process default.
+// backend is a legacy-local row and must remain local after a default change.
 func ForBackend(backend string) (AssetStore, error) {
 	switch strings.ToLower(strings.TrimSpace(backend)) {
-	case "":
-		return Default(), nil
-	case "local":
+	case "", "local":
 		return NewLocalStore(LocalRoot()), nil
 	case "r2", "s3":
 		return NewR2Store()

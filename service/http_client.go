@@ -16,10 +16,12 @@ import (
 )
 
 var (
-	httpClient              *http.Client
-	ssrfProtectedHTTPClient *http.Client
-	proxyClientLock         sync.Mutex
-	proxyClients            = make(map[string]*http.Client)
+	httpClient                     *http.Client
+	ssrfProtectedHTTPClient        *http.Client
+	ssrfProtectedDirectHTTPClient  *http.Client
+	strictUntrustedMediaHTTPClient *http.Client
+	proxyClientLock                sync.Mutex
+	proxyClients                   = make(map[string]*http.Client)
 )
 
 func checkRedirect(req *http.Request, via []*http.Request) error {
@@ -78,6 +80,8 @@ func InitHttpClient() {
 		}
 	}
 	ssrfProtectedHTTPClient = newProtectedFetchHTTPClient()
+	ssrfProtectedDirectHTTPClient = newProtectedFetchDirectHTTPClient()
+	strictUntrustedMediaHTTPClient = newStrictUntrustedMediaHTTPClient()
 }
 
 // GetHttpClient returns the general outbound client used by relay/provider
@@ -98,6 +102,26 @@ func GetSSRFProtectedHTTPClient() *http.Client {
 		return GetHttpClient()
 	}
 	return ssrfProtectedHTTPClient
+}
+
+// GetSSRFProtectedDirectHTTPClient fetches an untrusted URL without delegating
+// DNS resolution to an HTTP proxy, preserving dial-time SSRF validation.
+func GetSSRFProtectedDirectHTTPClient() *http.Client {
+	if fetchSetting := system_setting.GetFetchSetting(); fetchSetting != nil && !fetchSetting.EnableSSRFProtection {
+		return GetHttpClient()
+	}
+	return ssrfProtectedDirectHTTPClient
+}
+
+// GetStrictUntrustedMediaHTTPClient always uses direct DNS and rejects
+// private/reserved destinations at dial time, independent of fetch settings.
+func GetStrictUntrustedMediaHTTPClient() *http.Client {
+	if strictUntrustedMediaHTTPClient == nil {
+		client := newStrictUntrustedMediaHTTPClient()
+		client.Timeout = 60 * time.Second
+		return client
+	}
+	return strictUntrustedMediaHTTPClient
 }
 
 // GetHttpClientWithProxy returns the default client or a proxy-enabled one when proxyURL is provided.

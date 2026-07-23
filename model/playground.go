@@ -420,12 +420,12 @@ func CreatePlaygroundRun(r *PlaygroundRun) error {
 
 // GetPlaygroundRunByTaskId returns the most recent run linked to an async task,
 // or gorm.ErrRecordNotFound when the task did not originate from the playground.
-func GetPlaygroundRunByTaskId(taskId string) (*PlaygroundRun, error) {
-	if taskId == "" {
+func GetPlaygroundRunByTaskId(taskId string, userId int) (*PlaygroundRun, error) {
+	if taskId == "" || userId <= 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
 	var r PlaygroundRun
-	err := DB.Where("task_id = ?", taskId).Order("id DESC").First(&r).Error
+	err := DB.Where("task_id = ? AND user_id = ? AND modality = ?", taskId, userId, "video").Order("id DESC").First(&r).Error
 	if err != nil {
 		return nil, err
 	}
@@ -433,13 +433,46 @@ func GetPlaygroundRunByTaskId(taskId string) (*PlaygroundRun, error) {
 }
 
 // UpdatePlaygroundRunResult points a run at a persisted output asset.
-func UpdatePlaygroundRunResult(id, assetId int, resultURL string) error {
-	return DB.Model(&PlaygroundRun{}).
-		Where("id = ?", id).
+func UpdatePlaygroundRunResult(id, userId, assetId int, resultURL string) error {
+	result := DB.Model(&PlaygroundRun{}).
+		Where("id = ? AND user_id = ? AND asset_id = ?", id, userId, 0).
 		Updates(map[string]any{
 			"asset_id":   assetId,
 			"result_url": resultURL,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// ListUnpersistedSuccessfulVideoRuns returns durable video-output work. The
+// join excludes pending, failed, missing, and cross-user task references.
+func ListUnpersistedSuccessfulVideoRuns(afterID, limit int) ([]PlaygroundRun, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	var runs []PlaygroundRun
+	err := DB.Table("playground_runs").
+		Select("playground_runs.*").
+		Joins("JOIN tasks ON tasks.task_id = playground_runs.task_id AND tasks.user_id = playground_runs.user_id").
+		Where("playground_runs.modality = ? AND playground_runs.asset_id = ? AND playground_runs.id > ?", "video", 0, afterID).
+		Where("tasks.status = ?", TaskStatusSuccess).
+		Order("playground_runs.id").Limit(limit).Scan(&runs).Error
+	return runs, err
+}
+
+func HasUnpersistedSuccessfulVideoRuns() bool {
+	var count int64
+	err := DB.Table("playground_runs").
+		Joins("JOIN tasks ON tasks.task_id = playground_runs.task_id AND tasks.user_id = playground_runs.user_id").
+		Where("playground_runs.modality = ? AND playground_runs.asset_id = ?", "video", 0).
+		Where("tasks.status = ?", TaskStatusSuccess).
+		Limit(1).Count(&count).Error
+	return err == nil && count > 0
 }
 
 func ListPlaygroundRuns(userId int, modality string, offset, limit int) ([]PlaygroundRun, int64, error) {

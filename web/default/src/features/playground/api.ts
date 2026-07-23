@@ -338,6 +338,20 @@ export async function uploadPlaygroundAsset(
   return res.data.data as PlaygroundAsset
 }
 
+export async function importPlaygroundAsset(
+  sourceUrl: string,
+  kind: 'image' | 'video' | 'audio'
+): Promise<PlaygroundAsset> {
+  const res = await api.post(`${API_ENDPOINTS.ASSETS}/import`, {
+    source_url: sourceUrl,
+    kind,
+  })
+  if (!res.data?.success) {
+    throw new Error(res.data?.message || 'Import failed')
+  }
+  return res.data.data as PlaygroundAsset
+}
+
 export async function deletePlaygroundAsset(id: number): Promise<void> {
   await api.delete(`${API_ENDPOINTS.ASSETS}/${id}`)
 }
@@ -483,6 +497,7 @@ export async function createPlaygroundRun(input: {
   model: string
   prompt: string
   result_url?: string
+  asset_id?: number
   quota?: number
   task_id?: string
 }): Promise<PlaygroundRun | null> {

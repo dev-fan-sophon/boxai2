@@ -81,3 +81,9 @@ type TaskAdaptor interface {
 type OpenAIVideoConverter interface {
 	ConvertToOpenAIVideo(originTask *model.Task) ([]byte, error)
 }
+
+// MappedTaskRequestValidator validates provider-specific constraints after
+// channel model mapping has selected the actual upstream model.
+type MappedTaskRequestValidator interface {
+	ValidateMappedRequest(c *gin.Context, info *relaycommon.RelayInfo) *dto.TaskError
+}

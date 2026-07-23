@@ -7,8 +7,10 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 import { useQuery } from '@tanstack/react-query'
+import { Download, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,6 +21,7 @@ import {
   listPlaygroundTasks,
   recordInspirationTemplateUse,
 } from '../../api'
+import { downloadGeneratedMedia } from '../../lib/download-generated-media'
 import {
   INSPIRATION_CATEGORIES,
   INSPIRATION_TEMPLATES,
@@ -54,6 +57,7 @@ export function InspirationView(props: InspirationViewProps) {
   const { t } = useTranslation()
   const [view, setView] = useState<InspirationView>('square')
   const [category, setCategory] = useState<string>('all')
+  const [downloadingWorkId, setDownloadingWorkId] = useState('')
   const [modalityFilter, setModalityFilter] = useState<
     'all' | 'image' | 'video' | 'chat'
   >('all')
@@ -134,6 +138,22 @@ export function InspirationView(props: InspirationViewProps) {
       void recordInspirationTemplateUse(numericId)
     }
     props.onApplyTemplate(template)
+  }
+
+  const downloadWork = async (work: InspirationWork) => {
+    if (!work.previewUrl || work.modality === 'chat') return
+    setDownloadingWorkId(work.id)
+    try {
+      await downloadGeneratedMedia(
+        work.previewUrl,
+        `generated-${work.modality}-${work.id}`,
+        work.modality
+      )
+    } catch {
+      toast.error(t('Download failed'))
+    } finally {
+      setDownloadingWorkId('')
+    }
   }
 
   const worksList = useMemo(() => {
@@ -311,16 +331,34 @@ export function InspirationView(props: InspirationViewProps) {
                     {work.prompt}
                   </p>
                 </button>
-                {props.onRemoveWork && !String(work.id).startsWith('run-') && (
-                  <Button
-                    size='sm'
-                    variant='ghost'
-                    className='text-muted-foreground h-7 text-xs'
-                    onClick={() => props.onRemoveWork?.(work.id)}
-                  >
-                    {t('Remove')}
-                  </Button>
-                )}
+                <div className='flex shrink-0 items-center gap-1'>
+                  {work.previewUrl && work.modality !== 'chat' && (
+                    <Button
+                      size='icon-sm'
+                      variant='ghost'
+                      aria-label={t('Download')}
+                      disabled={downloadingWorkId === work.id}
+                      onClick={() => void downloadWork(work)}
+                    >
+                      {downloadingWorkId === work.id ? (
+                        <Loader2 className='size-4 animate-spin' />
+                      ) : (
+                        <Download className='size-4' />
+                      )}
+                    </Button>
+                  )}
+                  {props.onRemoveWork &&
+                    !String(work.id).startsWith('run-') && (
+                      <Button
+                        size='sm'
+                        variant='ghost'
+                        className='text-muted-foreground h-7 text-xs'
+                        onClick={() => props.onRemoveWork?.(work.id)}
+                      >
+                        {t('Remove')}
+                      </Button>
+                    )}
+                </div>
               </div>
               {work.previewUrl && work.modality === 'image' && (
                 <img

@@ -1,11 +1,13 @@
 package controller
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -15,6 +17,63 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
+
+func TestNormalizeChannelTestEndpointDetectsOpenAIImageModels(t *testing.T) {
+	for _, modelName := range []string{
+		"gpt-image-1",
+		"gpt-image-2",
+		"chatgpt-image-latest",
+		"grok-imagine",
+		"grok-imagine-image",
+		"grok-imagine-image-quality",
+		"grok-imagine-edit",
+	} {
+		t.Run(modelName, func(t *testing.T) {
+			require.Equal(
+				t,
+				string(constant.EndpointTypeImageGeneration),
+				normalizeChannelTestEndpoint(&model.Channel{}, modelName, ""),
+			)
+		})
+	}
+}
+
+func TestNormalizeChannelTestEndpointPreservesExplicitEndpoint(t *testing.T) {
+	require.Equal(
+		t,
+		string(constant.EndpointTypeOpenAI),
+		normalizeChannelTestEndpoint(&model.Channel{}, "gpt-image-2", string(constant.EndpointTypeOpenAI)),
+	)
+}
+
+func TestNormalizeChannelTestEndpointDetectsGrokVideoModels(t *testing.T) {
+	for _, modelName := range []string{
+		"grok-imagine-video",
+		"grok-imagine-video-1.5",
+		"  GROK-IMAGINE-VIDEO-1.5  ",
+	} {
+		t.Run(modelName, func(t *testing.T) {
+			require.Equal(
+				t,
+				string(constant.EndpointTypeOpenAIVideo),
+				normalizeChannelTestEndpoint(&model.Channel{}, modelName, ""),
+			)
+		})
+	}
+}
+
+func TestChannelTestRejectsAsyncVideoWithoutSendingChatRequest(t *testing.T) {
+	result := testChannel(
+		context.Background(),
+		&model.Channel{Type: constant.ChannelTypeOpenAI},
+		1,
+		"grok-imagine-video",
+		"",
+		false,
+	)
+
+	require.ErrorContains(t, result.localErr, "asynchronous video channel test is not supported")
+}
 
 func TestSettleTestQuotaUsesTieredBilling(t *testing.T) {
 	info := &relaycommon.RelayInfo{

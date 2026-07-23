@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/QuantumNous/new-api/service/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 )
 
 func TestPersistPlaygroundOutputDataURL(t *testing.T) {
@@ -39,7 +41,7 @@ func TestPersistPlaygroundOutputDataURL(t *testing.T) {
 	assert.True(t, strings.HasPrefix(asset.StorageKey, "outputs/99/"), "key: %s", asset.StorageKey)
 	assert.NotZero(t, asset.Id)
 
-	_, body, err := OpenPlaygroundAssetContent(context.Background(), asset.StorageKey, 0)
+	_, body, err := OpenPlaygroundAssetContent(context.Background(), asset.Backend, asset.StorageKey, 0)
 	require.NoError(t, err)
 	got, err := io.ReadAll(body)
 	require.NoError(t, body.Close())
@@ -73,22 +75,68 @@ func TestPlaygroundRunTaskLinkage(t *testing.T) {
 	require.NoError(t, model.DB.AutoMigrate(&model.PlaygroundRun{}))
 	t.Cleanup(func() { model.DB.Exec("DELETE FROM playground_runs") })
 
-	_, err := model.GetPlaygroundRunByTaskId("missing")
+	_, err := model.GetPlaygroundRunByTaskId("missing", 3)
 	assert.Error(t, err)
 
 	run := &model.PlaygroundRun{UserId: 3, Modality: "video", TaskId: "task-abc"}
 	require.NoError(t, model.CreatePlaygroundRun(run))
+	otherRun := &model.PlaygroundRun{UserId: 4, Modality: "video", TaskId: "task-abc"}
+	require.NoError(t, model.CreatePlaygroundRun(otherRun))
+	chatRun := &model.PlaygroundRun{UserId: 3, Modality: "chat", TaskId: "task-chat"}
+	require.NoError(t, model.CreatePlaygroundRun(chatRun))
 
-	got, err := model.GetPlaygroundRunByTaskId("task-abc")
+	got, err := model.GetPlaygroundRunByTaskId("task-abc", 3)
 	require.NoError(t, err)
 	assert.Equal(t, run.Id, got.Id)
 	assert.Equal(t, 0, got.AssetId)
+	otherGot, err := model.GetPlaygroundRunByTaskId("task-abc", 4)
+	require.NoError(t, err)
+	assert.Equal(t, otherRun.Id, otherGot.Id)
+	_, err = model.GetPlaygroundRunByTaskId("task-chat", 3)
+	require.ErrorIs(t, err, gorm.ErrRecordNotFound)
 
-	require.NoError(t, model.UpdatePlaygroundRunResult(run.Id, 77, "/api/playground/assets/77/content"))
-	got, err = model.GetPlaygroundRunByTaskId("task-abc")
+	assert.Error(t, model.UpdatePlaygroundRunResult(run.Id, 4, 99, "/wrong-user"))
+	got, err = model.GetPlaygroundRunByTaskId("task-abc", 3)
+	require.NoError(t, err)
+	assert.Equal(t, 0, got.AssetId)
+	require.NoError(t, model.UpdatePlaygroundRunResult(run.Id, 3, 77, "/api/playground/assets/77/content"))
+	got, err = model.GetPlaygroundRunByTaskId("task-abc", 3)
 	require.NoError(t, err)
 	assert.Equal(t, 77, got.AssetId)
 	assert.Equal(t, "/api/playground/assets/77/content", got.ResultURL)
+	otherGot, err = model.GetPlaygroundRunByTaskId("task-abc", 4)
+	require.NoError(t, err)
+	assert.Equal(t, 0, otherGot.AssetId)
+}
+
+func TestUnpersistedVideoRunQuerySkipsIneligibleRows(t *testing.T) {
+	require.NoError(t, model.DB.AutoMigrate(&model.PlaygroundRun{}, &model.Task{}))
+	t.Cleanup(func() {
+		model.DB.Where("user_id = ?", 303).Delete(&model.PlaygroundRun{})
+		model.DB.Where("user_id = ?", 303).Delete(&model.Task{})
+	})
+
+	for i := 0; i < 10; i++ {
+		taskID := fmt.Sprintf("pending-%d", i)
+		require.NoError(t, model.DB.Create(&model.Task{
+			TaskID: taskID, UserId: 303, Status: model.TaskStatusSubmitted,
+		}).Error)
+		require.NoError(t, model.CreatePlaygroundRun(&model.PlaygroundRun{
+			UserId: 303, Modality: "video", TaskId: taskID,
+		}))
+	}
+	require.NoError(t, model.DB.Create(&model.Task{
+		TaskID: "successful-video", UserId: 303, Status: model.TaskStatusSuccess,
+	}).Error)
+	require.NoError(t, model.CreatePlaygroundRun(&model.PlaygroundRun{
+		UserId: 303, Modality: "video", TaskId: "successful-video",
+	}))
+
+	runs, err := model.ListUnpersistedSuccessfulVideoRuns(0, 10)
+	require.NoError(t, err)
+	require.Len(t, runs, 1)
+	assert.Equal(t, "successful-video", runs[0].TaskId)
+	assert.True(t, model.HasUnpersistedSuccessfulVideoRuns())
 }
 
 func TestSeedAndListPlaygroundAgents(t *testing.T) {
@@ -122,5 +170,37 @@ func TestPersistPlaygroundOutputNotPersistable(t *testing.T) {
 		asset, err := PersistPlaygroundOutput(context.Background(), 1, "image", ref)
 		require.NoError(t, err, "ref=%q", ref)
 		assert.Nil(t, asset, "ref=%q", ref)
+	}
+}
+
+func TestResolveOutputMimeRejectsSpoofedOrMismatchedContent(t *testing.T) {
+	_, _, err := resolveOutputMime([]byte("<html>not an image</html>"), "image/png", "image")
+	assert.Error(t, err)
+
+	png := []byte{0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d}
+	_, _, err = resolveOutputMime(png, "image/png", "video")
+	assert.Error(t, err)
+}
+
+func TestResolveOutputMimeRecognizesMediaContainers(t *testing.T) {
+	tests := []struct {
+		name, declared, modality, wantMime, wantKind string
+		content                                      []byte
+	}{
+		{name: "mp4 video", declared: "video/mp4", modality: "video", wantMime: "video/mp4", wantKind: "video", content: []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'}},
+		{name: "quicktime", declared: "video/quicktime", modality: "video", wantMime: "video/quicktime", wantKind: "video", content: []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'q', 't', ' ', ' '}},
+		{name: "m4a audio", declared: "audio/m4a", modality: "audio", wantMime: "audio/m4a", wantKind: "audio", content: []byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'M', '4', 'A', ' '}},
+		{name: "webm video", declared: "video/webm", modality: "video", wantMime: "video/webm", wantKind: "video", content: []byte{0x1a, 0x45, 0xdf, 0xa3}},
+		{name: "webm audio", declared: "audio/webm", modality: "audio", wantMime: "audio/webm", wantKind: "audio", content: []byte{0x1a, 0x45, 0xdf, 0xa3}},
+		{name: "ogg audio", declared: "audio/ogg", modality: "audio", wantMime: "audio/ogg", wantKind: "audio", content: []byte("OggS")},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mimeType, kind, err := resolveOutputMime(test.content, test.declared, test.modality)
+			require.NoError(t, err)
+			assert.Equal(t, test.wantMime, mimeType)
+			assert.Equal(t, test.wantKind, kind)
+		})
 	}
 }

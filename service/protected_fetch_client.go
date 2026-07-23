@@ -28,10 +28,19 @@ type ssrfProtectedRoundTripper struct {
 	resolver      ssrfResolver
 	dialContext   func(ctx context.Context, network, address string) (net.Conn, error)
 	getProtection func() (*common.SSRFProtection, bool, error)
+	validateURL   func(string) error
 	proxy         func(*http.Request) (*url.URL, error)
 
 	mutex      sync.Mutex
 	transports map[string]*http.Transport
+}
+
+var strictUntrustedMediaProtection = &common.SSRFProtection{
+	AllowPrivateIp:         false,
+	DomainFilterMode:       false,
+	IpFilterMode:           false,
+	AllowedPorts:           []int{80, 443},
+	ApplyIPFilterForDomain: true,
 }
 
 func currentFetchProtection() (*common.SSRFProtection, bool, error) {
@@ -57,6 +66,29 @@ func currentFetchProtection() (*common.SSRFProtection, bool, error) {
 
 func newProtectedFetchHTTPClient() *http.Client {
 	return newProtectedFetchHTTPClientWithDialer(nil, nil, nil)
+}
+
+func newProtectedFetchDirectHTTPClient() *http.Client {
+	return newProtectedFetchHTTPClientWithProxy(nil, nil, nil, func(*http.Request) (*url.URL, error) {
+		return nil, nil
+	})
+}
+
+func newStrictUntrustedMediaHTTPClient() *http.Client {
+	client := newProtectedFetchHTTPClientWithProxy(nil, nil, func() (*common.SSRFProtection, bool, error) {
+		return strictUntrustedMediaProtection, true, nil
+	}, func(*http.Request) (*url.URL, error) {
+		return nil, nil
+	})
+	client.Transport.(*ssrfProtectedRoundTripper).validateURL = ValidateUntrustedMediaURL
+	client.Timeout = 60 * time.Second
+	return client
+}
+
+// ValidateUntrustedMediaURL applies non-configurable network boundaries to
+// user/provider-controlled media URLs.
+func ValidateUntrustedMediaURL(urlStr string) error {
+	return strictUntrustedMediaProtection.ValidateURL(urlStr)
 }
 
 func newProtectedFetchHTTPClientWithDialer(resolver ssrfResolver, dialContext func(ctx context.Context, network, address string) (net.Conn, error), getProtection func() (*common.SSRFProtection, bool, error)) *http.Client {
@@ -86,6 +118,7 @@ func newProtectedFetchHTTPClientWithProxy(resolver ssrfResolver, dialContext fun
 			resolver:      resolver,
 			dialContext:   dialContext,
 			getProtection: getProtection,
+			validateURL:   ValidateSSRFProtectedFetchURL,
 			proxy:         proxy,
 			transports:    make(map[string]*http.Transport),
 		},
@@ -101,7 +134,7 @@ func (t *ssrfProtectedRoundTripper) RoundTrip(req *http.Request) (*http.Response
 	if req == nil || req.URL == nil {
 		return nil, fmt.Errorf("invalid request")
 	}
-	if err := ValidateSSRFProtectedFetchURL(req.URL.String()); err != nil {
+	if err := t.validateURL(req.URL.String()); err != nil {
 		return nil, err
 	}
 

@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
 	"strings"
 
@@ -33,6 +34,32 @@ func PersistPlaygroundOutput(ctx context.Context, userId int, modality, resultRe
 		return nil, nil // not persistable
 	}
 
+	return persistPlaygroundOutputContent(ctx, userId, modality, content, declaredMime)
+}
+
+// PersistPlaygroundOutputRequest stores media returned by an operator-managed
+// provider request. Callers must construct the URL and authorization headers;
+// this path is not for user-controlled URLs.
+func PersistPlaygroundOutputRequest(ctx context.Context, userId int, modality string, req *http.Request, client *http.Client) (*model.PlaygroundAsset, error) {
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("provider media request failed")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("provider media request failed: status %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, PlaygroundAssetMaxVideoBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > PlaygroundAssetMaxVideoBytes {
+		return nil, fmt.Errorf("output exceeds size limit")
+	}
+	return persistPlaygroundOutputContent(ctx, userId, modality, body, resp.Header.Get("Content-Type"))
+}
+
+func persistPlaygroundOutputContent(ctx context.Context, userId int, modality string, content []byte, declaredMime string) (*model.PlaygroundAsset, error) {
 	mimeType, kind, err := resolveOutputMime(content, declaredMime, modality)
 	if err != nil {
 		return nil, err
@@ -74,9 +101,13 @@ func fetchPlaygroundOutput(ctx context.Context, ref string) ([]byte, string, err
 	case strings.HasPrefix(lower, "data:"):
 		return decodePlaygroundDataURL(ref)
 	case strings.HasPrefix(lower, "http://"), strings.HasPrefix(lower, "https://"):
-		resp, err := DoDownloadRequest(ref, "playground output persist")
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, ref, nil)
 		if err != nil {
-			return nil, "", err
+			return nil, "", fmt.Errorf("create output download request failed")
+		}
+		resp, err := GetStrictUntrustedMediaHTTPClient().Do(req)
+		if err != nil {
+			return nil, "", fmt.Errorf("output download request failed")
 		}
 		defer resp.Body.Close()
 		if resp.StatusCode != 200 {
@@ -101,11 +132,6 @@ func fetchPlaygroundOutput(ctx context.Context, ref string) ([]byte, string, err
 // declared mime, then a content sniff, falling back to modality only when a
 // sniff succeeds.
 func resolveOutputMime(content []byte, declaredMime, modality string) (mimeType string, kind string, err error) {
-	if m := NormalizePlaygroundMime(declaredMime); IsPlaygroundMimeAllowed(m) {
-		if dk, e := DetectPlaygroundAssetKind(m); e == nil {
-			return m, dk, nil
-		}
-	}
 	header := content
 	if len(header) > 512 {
 		header = header[:512]

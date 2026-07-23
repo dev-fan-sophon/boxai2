@@ -70,8 +70,12 @@ func TestSaveAndResolvePlaygroundAssetFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.FileExists(t, abs)
 
+	// Persisted backend selection must survive a process default change.
+	t.Setenv("STORAGE_BACKEND", "r2")
+	storage.Reset()
+
 	// Content is served through the store; local backend streams (no presign).
-	redirect, body, err := OpenPlaygroundAssetContent(context.Background(), key, 0)
+	redirect, body, err := OpenPlaygroundAssetContent(context.Background(), "local", key, 0)
 	require.NoError(t, err)
 	assert.Empty(t, redirect)
 	require.NotNil(t, body)
@@ -85,7 +89,7 @@ func TestSaveAndResolvePlaygroundAssetFile(t *testing.T) {
 	_, err = ResolvePlaygroundAssetPath(filepath.Join("..", "x"))
 	assert.Error(t, err)
 
-	DeletePlaygroundAssetFile(key)
+	DeletePlaygroundAssetFile("local", key)
 	_, err = os.Stat(abs)
 	assert.True(t, os.IsNotExist(err))
 }
@@ -105,22 +109,22 @@ func TestPublishPlaygroundAssetObjectLocal(t *testing.T) {
 	key, _, mimeType, _, err := SavePlaygroundAssetFile(7, "shot.png", "image/png", bytes.NewReader(data), int64(len(data)))
 	require.NoError(t, err)
 
-	publicKey, publicURL, err := PublishPlaygroundAssetObject(context.Background(), 7, key, mimeType, int64(len(data)))
+	publicKey, publicURL, err := PublishPlaygroundAssetObject(context.Background(), 7, "local", key, mimeType, int64(len(data)))
 	require.NoError(t, err)
 	assert.True(t, storage.IsPublicKey(publicKey), "public key must use a public prefix: %s", publicKey)
 	// local backend has no CDN, so the URL is empty (callers fall back)
 	assert.Empty(t, publicURL)
 
 	// the copied object is retrievable at the public key
-	_, body, err := OpenPlaygroundAssetContent(context.Background(), publicKey, 0)
+	_, body, err := OpenPlaygroundAssetContent(context.Background(), "local", publicKey, 0)
 	require.NoError(t, err)
 	got, err := io.ReadAll(body)
 	require.NoError(t, body.Close())
 	require.NoError(t, err)
 	assert.Equal(t, data, got)
 
-	UnpublishPlaygroundAssetObject(context.Background(), publicKey)
-	_, _, err = OpenPlaygroundAssetContent(context.Background(), publicKey, 0)
+	UnpublishPlaygroundAssetObject(context.Background(), "local", publicKey)
+	_, _, err = OpenPlaygroundAssetContent(context.Background(), "local", publicKey, 0)
 	assert.Error(t, err)
 }
 

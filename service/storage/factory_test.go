@@ -36,4 +36,8 @@ func TestPersistedLocalBackendIgnoresChangedDefault(t *testing.T) {
 	data, err := io.ReadAll(body)
 	require.NoError(t, err)
 	assert.Equal(t, "proof", string(data))
+
+	legacyStore, err := ForBackend("")
+	require.NoError(t, err)
+	assert.Equal(t, "local", legacyStore.Backend())
 }

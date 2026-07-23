@@ -16,7 +16,9 @@ import {
   generateImages,
   generateSpeech,
   submitVideo,
+  uploadPlaygroundAsset,
 } from '../api'
+import { persistGeneratedMediaAsset } from '../lib/download-generated-media'
 import type { GeneratedImage, VideoSubmission } from '../types'
 
 /**
@@ -46,13 +48,26 @@ export function useStudio() {
     mutationFn: generateImages,
     onSuccess: (images, variables) => {
       setImages(images)
-      void createPlaygroundRun({
-        modality: 'image',
-        model: variables.model,
-        prompt: variables.prompt,
-        result_url: images[0]?.url,
-      })
-      void queryClient.invalidateQueries({ queryKey: ['playground', 'runs'] })
+      void (async () => {
+        await Promise.allSettled(
+          images.map(async (image, index) => {
+            const asset = await persistGeneratedMediaAsset(
+              image.url,
+              `generated-image-${index + 1}`,
+              'image'
+            )
+            await createPlaygroundRun({
+              modality: 'image',
+              model: variables.model,
+              prompt: variables.prompt,
+              asset_id: asset.id,
+            })
+          })
+        )
+        await queryClient.invalidateQueries({
+          queryKey: ['playground', 'runs'],
+        })
+      })()
     },
   })
   const videoMutation = useMutation({
@@ -76,12 +91,29 @@ export function useStudio() {
     onSuccess: (blob, variables) => {
       if (audioUrl) URL.revokeObjectURL(audioUrl)
       setAudioUrl(URL.createObjectURL(blob))
-      void createPlaygroundRun({
-        modality: 'audio',
-        model: variables.model,
-        prompt: variables.text,
-      })
-      void queryClient.invalidateQueries({ queryKey: ['playground', 'runs'] })
+      void (async () => {
+        let assetId: number
+        try {
+          const extension = variables.settings.audioFormat || 'mp3'
+          const asset = await uploadPlaygroundAsset(
+            new File([blob], `speech.${extension}`, { type: blob.type }),
+            'audio'
+          )
+          assetId = asset.id
+        } catch {
+          // Playback remains available without creating a broken saved run.
+          return
+        }
+        await createPlaygroundRun({
+          modality: 'audio',
+          model: variables.model,
+          prompt: variables.text,
+          asset_id: assetId,
+        })
+        await queryClient.invalidateQueries({
+          queryKey: ['playground', 'runs'],
+        })
+      })()
     },
   })
 

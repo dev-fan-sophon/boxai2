@@ -1625,6 +1625,7 @@
     "Download": "下载",
     "Download a starter SKILL.md with base URL placeholders and playground endpoint map.": "下载包含基础 URL 占位符和 playground 端点映射的 SKILL.md 模板。",
     "Download audio": "下载音频",
+    "Download failed": "下载失败",
     "Download QR code": "下载二维码",
     "Download SKILL.md": "下载 SKILL.md",
     "Download starter skills and client snippets for quick integration.": "下载入门 Skill 与客户端示例，快速接入。",

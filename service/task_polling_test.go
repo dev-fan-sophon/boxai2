@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -27,6 +28,27 @@ type taskPollingFetchAdaptor struct {
 	blockStarted chan struct{}
 	releaseBlock chan struct{}
 	blockOnce    sync.Once
+}
+
+func TestRedactVideoResponseBodyRemovesXAIUpstreamURL(t *testing.T) {
+	platform := constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeXai))
+	body := []byte(`{"status":"done","video":{"url":"https://signed.video.example/v.mp4?secret=token","duration":8}}`)
+
+	redacted := redactVideoResponseBody(body, platform)
+
+	require.NotContains(t, string(redacted), "signed.video.example")
+	var result map[string]any
+	require.NoError(t, common.Unmarshal(redacted, &result))
+	require.NotContains(t, result["video"].(map[string]any), "url")
+}
+
+func TestRedactVideoResponseBodyFailsClosedForMalformedXAIResponse(t *testing.T) {
+	platform := constant.TaskPlatform(strconv.Itoa(constant.ChannelTypeXai))
+	body := []byte(`{"video":{"url":"https://signed.video.example/v.mp4?secret=token"}`)
+
+	redacted := redactVideoResponseBody(body, platform)
+
+	assert.JSONEq(t, `{"redacted":true}`, string(redacted))
 }
 
 func (a *taskPollingFetchAdaptor) Init(_ *relaycommon.RelayInfo) {}
