@@ -39,20 +39,22 @@ type ChatMessageRenderState = {
 export function appendUserMessagePair(
   messages: Message[],
   content: string,
-  attachments?: ChatAttachment[]
+  attachments?: ChatAttachment[],
+  model?: string
 ): Message[] {
   const submittedAt = Date.now()
 
   return [
     ...messages,
     createUserMessage(content, submittedAt, attachments),
-    createLoadingAssistantMessage(submittedAt),
+    createLoadingAssistantMessage(submittedAt, model),
   ]
 }
 
 export function createRegeneratedMessages(
   messages: Message[],
-  messageKey: string
+  messageKey: string,
+  model?: string
 ): Message[] | null {
   const messageIndex = messages.findIndex(
     (message) => message.key === messageKey
@@ -65,11 +67,14 @@ export function createRegeneratedMessages(
   if (messages[messageIndex].from === MESSAGE_ROLES.USER) {
     return [
       ...messages.slice(0, messageIndex + 1),
-      createLoadingAssistantMessage(),
+      createLoadingAssistantMessage(Date.now(), model),
     ]
   }
 
-  return [...messages.slice(0, messageIndex), createLoadingAssistantMessage()]
+  return [
+    ...messages.slice(0, messageIndex),
+    createLoadingAssistantMessage(Date.now(), model),
+  ]
 }
 
 export function removeMessageByKey(
@@ -96,7 +101,8 @@ export function applyMessageEdit(
   messages: Message[],
   messageKey: string,
   content: string,
-  shouldSubmit: boolean
+  shouldSubmit: boolean,
+  model?: string
 ): ApplyMessageEditResult | null {
   const submittedAt = Date.now()
   const messageIndex = messages.findIndex(
@@ -126,7 +132,7 @@ export function applyMessageEdit(
   return {
     messages: [
       ...updatedMessages.slice(0, messageIndex + 1),
-      createLoadingAssistantMessage(submittedAt),
+      createLoadingAssistantMessage(submittedAt, model),
     ],
     shouldSend: true,
   }

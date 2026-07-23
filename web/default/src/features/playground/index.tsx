@@ -34,7 +34,11 @@ import { usePricingData } from '@/features/pricing/hooks/use-pricing-data'
 import { canTryInPlayground } from '@/features/pricing/lib/playground-eligibility'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { useAuthStore } from '@/stores/auth-store'
-import { usePlaygroundStore } from '@/stores/playground-store'
+import {
+  selectActiveChatMessages,
+  selectActiveSession,
+  usePlaygroundStore,
+} from '@/stores/playground-store'
 
 import {
   createManagedToolRun,
@@ -63,6 +67,7 @@ import {
   useChatHandler,
   usePlaygroundConversation,
   usePlaygroundOptions,
+  useSessionCloudSync,
 } from './hooks'
 import { useStudio } from './hooks/use-studio'
 import { persistGeneratedMediaAsset } from './lib/download-generated-media'
@@ -84,6 +89,8 @@ export function Playground() {
   const isAuthenticated = Boolean(user)
   const [signInDialogOpen, setSignInDialogOpen] = useState(false)
   const [catalogDrawerOpen, setCatalogDrawerOpen] = useState(false)
+  const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false)
+  const [railTab, setRailTab] = useState<'history' | 'models'>('history')
   // Settings panel: persisted open state on wide desktop, ephemeral overlay
   // between 1024–1279px, bottom sheet below 1024px.
   const isDesktop = useMediaQuery('(min-width: 1024px)')
@@ -95,8 +102,11 @@ export function Playground() {
   const setView = usePlaygroundStore((state) => state.setView)
   const workspaceMode = usePlaygroundStore((state) => state.workspaceMode)
   const setWorkspaceMode = usePlaygroundStore((state) => state.setWorkspaceMode)
+  const activeModality = usePlaygroundStore((state) => state.activeModality)
+  const setActiveModality = usePlaygroundStore((state) => state.setActiveModality)
   const selectStoreModel = usePlaygroundStore((state) => state.selectModel)
   const selectDuo = usePlaygroundStore((state) => state.selectDuo)
+  const startNewSession = usePlaygroundStore((state) => state.startNewSession)
   const setPrefill = usePlaygroundStore((state) => state.setPrefill)
   const settingsPanelOpen = usePlaygroundStore(
     (state) => state.ui.settingsPanelOpen
@@ -116,13 +126,16 @@ export function Playground() {
   const addRecentPrompt = usePlaygroundStore((state) => state.addRecentPrompt)
   const config = usePlaygroundStore((state) => state.config)
   const parameterEnabled = usePlaygroundStore((state) => state.parameterEnabled)
-  const messages = usePlaygroundStore((state) => state.messages)
+  const messages = usePlaygroundStore(selectActiveChatMessages)
+  const activeSession = usePlaygroundStore(selectActiveSession)
   const models = usePlaygroundStore((state) => state.models)
   const updateMessages = usePlaygroundStore((state) => state.setMessages)
   const setModels = usePlaygroundStore((state) => state.setModels)
   const setGroups = usePlaygroundStore((state) => state.setGroups)
   const patchConfig = usePlaygroundStore((state) => state.updateConfig)
   const clearMessages = usePlaygroundStore((state) => state.clearMessages)
+
+  useSessionCloudSync(isAuthenticated)
   const updateConfig = useCallback(
     <K extends keyof PlaygroundConfig>(key: K, value: PlaygroundConfig[K]) => {
       patchConfig({ [key]: value })
@@ -414,12 +427,18 @@ export function Playground() {
     sendChat,
     routeTurn: routeManagedTurn,
     canSubmit: canSubmitManagedTurn,
+    activeModel: config.model,
   })
 
   const handleClearMessages = () => {
     handleEditOpenChange(false)
     clearMessages()
   }
+
+  const handleNewSession = useCallback(() => {
+    handleEditOpenChange(false)
+    startNewSession(activeModality)
+  }, [activeModality, handleEditOpenChange, startNewSession])
 
   const { isLoadingModels } = usePlaygroundOptions({
     isAuthenticated,
@@ -435,14 +454,17 @@ export function Playground() {
     if (!search.model || appliedDeepLink.current === search.model) return
     if (!models.some((model) => model.value === search.model)) return
     appliedDeepLink.current = search.model
-    selectStoreModel(search.model)
-  }, [models, search.model, selectStoreModel])
+    const pricingModel = playgroundModels.find(
+      (model) => model.model_name === search.model
+    )
+    const modality = getModelModality(
+      pricingModel ?? { model_name: search.model }
+    )
+    selectStoreModel(search.model, undefined, { switchModality: modality })
+  }, [models, playgroundModels, search.model, selectStoreModel])
 
   const selectedCatalogModel = playgroundModels.find(
     (model) => model.model_name === config.model
-  )
-  const activeModality = getModelModality(
-    selectedCatalogModel ?? { model_name: config.model }
   )
 
   const chatModels = useMemo(
@@ -474,35 +496,47 @@ export function Playground() {
 
   const selectModelByModality = useCallback(
     (modality: StudioModality, preferredPrompt?: string) => {
+      // Prefer restoring the last session for this modality (and its model).
+      setActiveModality(modality)
+
       const current = playgroundModels.find(
         (model) => model.model_name === config.model
       )
       const currentMatches =
         current != null && getModelModality(current) === modality
-      const match = currentMatches
-        ? current
-        : playgroundModels.find(
-            (model) =>
-              models.some((item) => item.value === model.model_name) &&
-              getModelModality(model) === modality
-          )
-
-      if (!match) {
-        toast.error(t('No model available for this modality'), {
-          description: t(
-            'Try another template or wait until matching models load.'
-          ),
+      if (!currentMatches) {
+        const match = playgroundModels.find(
+          (model) =>
+            models.some((item) => item.value === model.model_name) &&
+            getModelModality(model) === modality
+        )
+        if (!match) {
+          toast.error(t('No model available for this modality'), {
+            description: t(
+              'Try another template or wait until matching models load.'
+            ),
+          })
+          return false
+        }
+        selectStoreModel(match.model_name, undefined, {
+          switchModality: modality,
         })
-        return false
       }
 
-      selectStoreModel(match.model_name)
       if (preferredPrompt != null) {
         setPrefill(preferredPrompt)
       }
       return true
     },
-    [config.model, models, playgroundModels, selectStoreModel, setPrefill, t]
+    [
+      config.model,
+      models,
+      playgroundModels,
+      selectStoreModel,
+      setActiveModality,
+      setPrefill,
+      t,
+    ]
   )
 
   const handleAgentSelect = useCallback(
@@ -560,8 +594,12 @@ export function Playground() {
       error={Boolean(pricing.error)}
       onRetry={() => pricing.refetch()}
       onSelect={(model) => {
-        selectStoreModel(model.model_name)
+        const modality = getModelModality(model)
+        selectStoreModel(model.model_name, undefined, {
+          switchModality: modality,
+        })
         setCatalogDrawerOpen(false)
+        if (isDesktop) setRailTab('history')
       }}
       pinnedModels={pinnedModels}
       onTogglePin={togglePinnedModel}
@@ -611,6 +649,10 @@ export function Playground() {
       catalog={catalog}
       catalogOpen={catalogDrawerOpen}
       onCatalogOpenChange={setCatalogDrawerOpen}
+      historyOpen={historyDrawerOpen}
+      onHistoryOpenChange={setHistoryDrawerOpen}
+      railTab={railTab}
+      onRailTabChange={setRailTab}
       settings={
         showWorkspace ? (
           <SettingsPanel
@@ -640,7 +682,23 @@ export function Playground() {
           pricingModel={selectedCatalogModel}
           group={config.group}
           mode={workspaceMode}
-          onOpenCatalog={() => setCatalogDrawerOpen(true)}
+          modality={activeModality}
+          sessionTitle={activeSession?.title}
+          onOpenCatalog={() => {
+            if (isDesktop) {
+              setRailTab('models')
+              return
+            }
+            setCatalogDrawerOpen(true)
+          }}
+          onOpenHistory={() => {
+            if (isDesktop) {
+              setRailTab('history')
+              return
+            }
+            setHistoryDrawerOpen(true)
+          }}
+          onNewSession={handleNewSession}
           actions={
             <Button
               size='icon'

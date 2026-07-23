@@ -99,7 +99,8 @@ export function createUserMessage(
  * Create a loading assistant message
  */
 export function createLoadingAssistantMessage(
-  startedAt: number = Date.now()
+  startedAt: number = Date.now(),
+  model?: string
 ): Message {
   return {
     key: nanoid(),
@@ -107,6 +108,7 @@ export function createLoadingAssistantMessage(
     versions: [createMessageVersion('')],
     createdAt: startedAt,
     startedAt,
+    model: model || undefined,
     reasoning: undefined,
     isReasoningComplete: false,
     isContentComplete: false,

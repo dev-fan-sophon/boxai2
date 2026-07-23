@@ -60,22 +60,57 @@ export function MessageMetadata(props: MessageMetadataProps) {
   const { t } = useTranslation()
   const messageTime = formatMessageTime(props.message.createdAt)
   const duration = formatDuration(props.message.durationMs, t)
+  let modelLabel: string | undefined
+  if (props.message.from === 'assistant') {
+    if (props.message.model) {
+      modelLabel = props.message.model
+    } else if (
+      props.message.status === 'complete' ||
+      props.message.status === 'error'
+    ) {
+      modelLabel = t('Model not recorded')
+    }
+  }
+  const modelChange =
+    props.message.modelChangeFrom && props.message.modelChangeTo
+      ? `${props.message.modelChangeFrom} → ${props.message.modelChangeTo}`
+      : undefined
 
-  if (!messageTime && !duration) {
+  if (!messageTime && !duration && !modelLabel && !modelChange) {
     return null
+  }
+
+  if (modelChange) {
+    return (
+      <div
+        className={cn(
+          'text-muted-foreground mt-1 flex min-h-4 items-center justify-center gap-1.5 text-[11px] leading-none'
+        )}
+      >
+        <span className='bg-muted/70 text-muted-foreground inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[10px] ring-1 ring-border/60'>
+          {t('Switched model')}: {modelChange}
+        </span>
+      </div>
+    )
   }
 
   return (
     <div
       className={cn(
-        'text-muted-foreground mt-1 flex min-h-4 items-center gap-1.5 text-[11px] leading-none',
+        'text-muted-foreground mt-1 flex min-h-4 flex-wrap items-center gap-1.5 text-[11px] leading-none',
         props.alignment === 'right' && 'justify-end'
       )}
     >
+      {modelLabel && (
+        <span className='font-mono text-[10px] opacity-80'>{modelLabel}</span>
+      )}
+      {modelLabel && (messageTime || duration) && (
+        <span aria-hidden='true'>·</span>
+      )}
       {messageTime && <time>{messageTime}</time>}
       {duration && (
         <>
-          {messageTime && <span aria-hidden='true'>·</span>}
+          {(messageTime || modelLabel) && <span aria-hidden='true'>·</span>}
           <span>{t('Response time: {{duration}}', { duration })}</span>
         </>
       )}

@@ -8,19 +8,21 @@ License, or (at your option) any later version.
 */
 import {
   ChevronDown,
+  History,
   ImageIcon,
   Layers,
   Music2,
+  Plus,
   Video,
   type LucideIcon,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { Button } from '@/components/ui/button'
 import { useMediaQuery } from '@/hooks/use-media-query'
 import { cn } from '@/lib/utils'
 
 import type { PricingModel } from '../../../pricing/types'
-import { getModelModality } from '../../lib/studio/model-modality'
 import {
   MODALITY_COLORS,
   modalityLabelKey,
@@ -33,8 +35,14 @@ type WorkspaceHeaderProps = {
   pricingModel?: PricingModel
   group: string
   mode: 'model' | 'duo'
-  /** Opens the catalog drawer on mobile */
+  modality: StudioModality
+  sessionTitle?: string
+  /** Opens the catalog drawer on mobile / focuses models rail on desktop */
   onOpenCatalog: () => void
+  /** Opens session history (mobile sheet / desktop rail tab) */
+  onOpenHistory?: () => void
+  /** Start a new session in the current modality */
+  onNewSession?: () => void
   /** Extra actions rendered at the right edge (settings toggle, etc.) */
   actions?: React.ReactNode
 }
@@ -56,9 +64,7 @@ const MEDIA_TOOL: Record<
 export function WorkspaceHeader(props: WorkspaceHeaderProps) {
   const { t } = useTranslation()
   const isDesktop = useMediaQuery('(min-width: 1024px)')
-  const modality = getModelModality(
-    props.pricingModel ?? { model_name: props.model }
-  )
+  const modality = props.modality
   const mediaTool =
     modality === 'image' || modality === 'video' || modality === 'audio'
       ? MEDIA_TOOL[modality]
@@ -83,8 +89,13 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
         <span className='border-border bg-muted/60 flex size-7 shrink-0 items-center justify-center rounded-lg border'>
           <Icon className='size-4' aria-hidden='true' />
         </span>
-        <span className='text-foreground truncate text-sm font-semibold'>
-          {t(mediaTool.titleKey)}
+        <span className='min-w-0'>
+          <span className='text-foreground block truncate text-sm font-semibold'>
+            {props.sessionTitle || t(mediaTool.titleKey)}
+          </span>
+          <span className='text-muted-foreground block truncate font-mono text-[11px]'>
+            {props.model || t('Select a model')}
+          </span>
         </span>
       </span>
     )
@@ -99,16 +110,23 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
             size={18}
           />
         </span>
-        <span className='text-foreground truncate font-mono text-sm font-semibold'>
-          {props.model || t('Select a model')}
-        </span>
-        <span
-          className={cn(
-            'shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium capitalize',
-            MODALITY_COLORS[modality].tag
-          )}
-        >
-          {t(modalityLabelKey(modality))}
+        <span className='min-w-0'>
+          <span className='text-foreground block truncate text-sm font-semibold'>
+            {props.sessionTitle || t('New chat')}
+          </span>
+          <span className='text-muted-foreground flex min-w-0 items-center gap-1.5'>
+            <span className='truncate font-mono text-[11px]'>
+              {props.model || t('Select a model')}
+            </span>
+            <span
+              className={cn(
+                'shrink-0 rounded border px-1 py-px text-[10px] font-medium capitalize',
+                MODALITY_COLORS[modality].tag
+              )}
+            >
+              {t(modalityLabelKey(modality))}
+            </span>
+          </span>
         </span>
       </span>
     )
@@ -117,7 +135,18 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
   return (
     <div className='playground-workspace-header border-border/70 flex h-11 shrink-0 items-center justify-between gap-2 border-b px-2 sm:h-12 sm:px-3'>
       {isDesktop ? (
-        modelInfo
+        <button
+          type='button'
+          onClick={props.onOpenCatalog}
+          className='focus-visible:ring-ring hover:bg-muted/50 flex min-w-0 items-center gap-1.5 rounded-xl py-1 pr-1.5 pl-0.5 text-left outline-none transition-colors focus-visible:ring-2'
+          aria-label={t('Open catalog')}
+        >
+          {modelInfo}
+          <ChevronDown
+            className='text-muted-foreground size-3.5 shrink-0'
+            aria-hidden='true'
+          />
+        </button>
       ) : (
         <button
           type='button'
@@ -132,11 +161,33 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
           />
         </button>
       )}
-      {props.actions && (
-        <div className='flex shrink-0 items-center gap-1 sm:gap-1.5'>
-          {props.actions}
-        </div>
-      )}
+      <div className='flex shrink-0 items-center gap-0.5 sm:gap-1'>
+        {props.onOpenHistory && (
+          <Button
+            size='icon'
+            variant='ghost'
+            className='text-muted-foreground hover:text-foreground size-9 touch-manipulation lg:hidden sm:size-8'
+            aria-label={t('History')}
+            onClick={props.onOpenHistory}
+          >
+            <History className='size-4' />
+          </Button>
+        )}
+        {props.onNewSession && (
+          <Button
+            size='icon'
+            variant='ghost'
+            className='text-muted-foreground hover:text-foreground size-9 touch-manipulation sm:size-8'
+            aria-label={
+              modality === 'chat' ? t('New chat') : t('New project')
+            }
+            onClick={props.onNewSession}
+          >
+            <Plus className='size-4' />
+          </Button>
+        )}
+        {props.actions}
+      </div>
     </div>
   )
 }

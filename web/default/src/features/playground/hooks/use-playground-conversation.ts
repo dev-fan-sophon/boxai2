@@ -35,6 +35,8 @@ type UsePlaygroundConversationOptions = {
   sendChat: (messages: Message[]) => void
   routeTurn?: (messages: Message[], text: string) => Promise<void>
   canSubmit: () => boolean
+  /** Model stamped onto new assistant placeholders for provenance. */
+  activeModel?: string
 }
 
 export function usePlaygroundConversation({
@@ -43,6 +45,7 @@ export function usePlaygroundConversation({
   sendChat,
   routeTurn,
   canSubmit,
+  activeModel,
 }: UsePlaygroundConversationOptions) {
   const [editingMessageKey, setEditingMessageKey] = useState<string | null>(
     null
@@ -51,7 +54,12 @@ export function usePlaygroundConversation({
   const handleSendMessage = useCallback(
     (text: string, attachments?: ChatAttachment[]): boolean => {
       if (!canSubmit()) return false
-      const nextMessages = appendUserMessagePair(messages, text, attachments)
+      const nextMessages = appendUserMessagePair(
+        messages,
+        text,
+        attachments,
+        activeModel
+      )
       updateMessages(nextMessages)
       if (routeTurn && text.trim() && !attachments?.length) {
         void routeTurn(nextMessages, text)
@@ -60,13 +68,17 @@ export function usePlaygroundConversation({
       }
       return true
     },
-    [canSubmit, messages, updateMessages, sendChat, routeTurn]
+    [canSubmit, messages, updateMessages, sendChat, routeTurn, activeModel]
   )
 
   const handleRegenerateMessage = useCallback(
     (message: Message) => {
       if (!canSubmit()) return
-      const nextMessages = createRegeneratedMessages(messages, message.key)
+      const nextMessages = createRegeneratedMessages(
+        messages,
+        message.key,
+        activeModel
+      )
       if (!nextMessages) return
 
       updateMessages(nextMessages)
@@ -90,7 +102,7 @@ export function usePlaygroundConversation({
         sendChat(nextMessages)
       }
     },
-    [canSubmit, messages, updateMessages, sendChat, routeTurn]
+    [canSubmit, messages, updateMessages, sendChat, routeTurn, activeModel]
   )
 
   const handleEditMessage = useCallback((message: Message) => {
@@ -112,7 +124,8 @@ export function usePlaygroundConversation({
         messages,
         editingMessageKey,
         newContent,
-        shouldSubmit
+        shouldSubmit,
+        activeModel
       )
       if (!editResult) return
 
@@ -141,6 +154,7 @@ export function usePlaygroundConversation({
       updateMessages,
       sendChat,
       routeTurn,
+      activeModel,
     ]
   )
 

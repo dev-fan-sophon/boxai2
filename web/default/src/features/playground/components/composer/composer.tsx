@@ -78,9 +78,9 @@ export function ComposerShell(props: ComposerShellProps) {
 
         {props.attachments}
 
-        <PromptInputFooter className='border-border/60 bg-muted/25 dark:bg-muted/15 border-t px-2 py-1.5 backdrop-blur-md sm:px-2.5'>
-          <div className='flex w-full items-center justify-between gap-1.5 sm:gap-2'>
-            <div className='flex min-w-0 items-center gap-0.5 sm:gap-1'>
+        <PromptInputFooter className='border-border/60 bg-muted/25 dark:bg-muted/15 relative z-10 border-t px-2 py-1.5 backdrop-blur-md sm:px-2.5'>
+          <div className='flex w-full min-w-0 items-center justify-between gap-1.5 sm:gap-2'>
+            <div className='flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden sm:gap-1'>
               {props.tools}
             </div>
             <div className='flex shrink-0 items-center gap-1.5 sm:gap-2'>

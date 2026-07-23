@@ -91,6 +91,8 @@ export const STORAGE_KEYS = {
   STUDIO: 'playground_studio',
   WORKBENCH: 'playground_workbench_prefs_v1',
   STORE: 'playground_store_v2',
+  /** Marker so the legacy global messages array is imported at most once. */
+  LEGACY_MESSAGES_IMPORTED: 'playground_legacy_messages_imported_v1',
 } as const
 
 // Error messages

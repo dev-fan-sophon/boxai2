@@ -97,11 +97,22 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+function chatMessagesFromSessions(state: {
+  sessions: Array<{ modality: string; messages?: Message[] }>
+}): Message[] {
+  const chat = state.sessions.find((session) => session.modality === 'chat')
+  return chat && 'messages' in chat && Array.isArray(chat.messages)
+    ? chat.messages
+    : []
+}
+
 describe('loadPersistedPlaygroundState', () => {
   it('returns defaults when no storage keys exist', () => {
     const state = loadPersistedPlaygroundState()
     expect(state.config).toEqual(DEFAULT_CONFIG)
     expect(state.messages).toEqual([])
+    expect(state.sessions.length).toBeGreaterThanOrEqual(1)
+    expect(state.activeModality).toBe('chat')
     expect(state.workspaceMode).toBe('model')
     expect(state.studioSettings).toEqual(DEFAULT_STUDIO_SETTINGS)
     expect(state.ui.settingsPanelOpen).toBe(true)
@@ -115,8 +126,9 @@ describe('loadPersistedPlaygroundState', () => {
     expect(state.config.temperature).toBe(0.3)
     expect(state.config.stream).toBe(DEFAULT_CONFIG.stream)
     expect(state.parameterEnabled.seed).toBe(true)
-    expect(state.messages).toHaveLength(1)
-    expect(state.messages[0].versions[0].content).toBe(
+    const chatMessages = chatMessagesFromSessions(state)
+    expect(chatMessages).toHaveLength(1)
+    expect(chatMessages[0].versions[0].content).toBe(
       'hello from legacy storage'
     )
     // Studio values clamped on load, invalid pin entries dropped.
@@ -139,7 +151,7 @@ describe('loadPersistedPlaygroundState', () => {
     expect(localStorage.getItem(STORAGE_KEYS.WORKBENCH)).not.toBeNull()
   })
 
-  it('prefers a valid v2 key over legacy keys', () => {
+  it('prefers a valid v2 key over legacy keys and imports messages into a session', () => {
     seedLegacyKeys()
     const v2Message: Message = {
       key: 'm2',
@@ -158,7 +170,8 @@ describe('loadPersistedPlaygroundState', () => {
     const state = loadPersistedPlaygroundState()
     expect(state.config.model).toBe('gemini-pro')
     expect(state.workspaceMode).toBe('duo')
-    expect(state.messages[0].versions[0].content).toBe('answer from v2')
+    const chatMessages = chatMessagesFromSessions(state)
+    expect(chatMessages[0].versions[0].content).toBe('answer from v2')
     expect(state.pinnedModels).toEqual(['gemini-pro'])
     expect(state.ui.settingsPanelOpen).toBe(false)
   })
@@ -169,7 +182,8 @@ describe('loadPersistedPlaygroundState', () => {
 
     const state = loadPersistedPlaygroundState()
     expect(state.config.model).toBe('claude-x')
-    expect(state.messages[0].versions[0].content).toBe(
+    const chatMessages = chatMessagesFromSessions(state)
+    expect(chatMessages[0].versions[0].content).toBe(
       'hello from legacy storage'
     )
   })
@@ -184,17 +198,55 @@ describe('loadPersistedPlaygroundState', () => {
     const state = loadPersistedPlaygroundState()
     // Valid v2 fields win; the unreadable messages field recovers from legacy.
     expect(state.config.model).toBe('gemini-pro')
-    expect(state.messages).toHaveLength(1)
-    expect(state.messages[0].versions[0].content).toBe(
+    const chatMessages = chatMessagesFromSessions(state)
+    expect(chatMessages).toHaveLength(1)
+    expect(chatMessages[0].versions[0].content).toBe(
+      'hello from legacy storage'
+    )
+  })
+
+  it('keeps v3 sessions without re-importing legacy messages', () => {
+    seedLegacyKeys()
+    seedV2({
+      workspaceMode: 'model',
+      activeModality: 'chat',
+      config: { model: 'gpt-4o' },
+      messages: [],
+      sessions: [
+        {
+          id: 's_keep',
+          modality: 'chat',
+          title: 'Kept session',
+          model: 'gpt-4o',
+          group: 'default',
+          messages: [userMessage],
+          isDraft: false,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+      activeSessionByModality: { chat: 's_keep' },
+      ui: { settingsPanelOpen: true },
+    })
+    localStorage.setItem(STORAGE_KEYS.LEGACY_MESSAGES_IMPORTED, '1')
+
+    const state = loadPersistedPlaygroundState()
+    expect(state.sessions).toHaveLength(1)
+    expect(state.sessions[0].id).toBe('s_keep')
+    expect(chatMessagesFromSessions(state)[0].versions[0].content).toBe(
       'hello from legacy storage'
     )
   })
 })
 
 describe('preparePersistedPlaygroundState', () => {
-  it('removes inline attachments without mutating live messages', () => {
+  it('removes inline attachments without mutating live session messages', () => {
     const state = loadPersistedPlaygroundState()
-    state.messages = [
+    const chat = state.sessions.find((session) => session.modality === 'chat')
+    if (!chat || chat.modality !== 'chat') {
+      throw new Error('expected chat session')
+    }
+    chat.messages = [
       {
         ...userMessage,
         attachments: [
@@ -210,9 +262,15 @@ describe('preparePersistedPlaygroundState', () => {
     ]
 
     const persisted = preparePersistedPlaygroundState(state)
+    const persistedChat = persisted.sessions.find(
+      (session) => session.modality === 'chat'
+    )
+    if (!persistedChat || persistedChat.modality !== 'chat') {
+      throw new Error('expected persisted chat session')
+    }
 
-    expect(persisted.messages[0].attachments).toBeUndefined()
-    expect(state.messages[0].attachments).toHaveLength(1)
+    expect(persistedChat.messages[0].attachments).toBeUndefined()
+    expect(chat.messages[0].attachments).toHaveLength(1)
     expect(JSON.stringify(persisted)).not.toContain('data:application/pdf')
   })
 })

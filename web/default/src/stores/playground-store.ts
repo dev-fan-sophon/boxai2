@@ -27,6 +27,20 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_PARAMETER_ENABLED,
 } from '@/features/playground/constants'
+import type {
+  ActiveSessionByModality,
+  PlaygroundSession,
+  SessionModality,
+} from '@/features/playground/lib/session/session-types'
+import {
+  createEmptySession,
+  findSession,
+  getActiveSession,
+  isChatSession,
+  titleFromFirstUserMessage,
+  touchSession,
+  upsertSession,
+} from '@/features/playground/lib/session/session-utils'
 import {
   applyMessageStateUpdate,
   type MessageStateUpdater,
@@ -54,6 +68,7 @@ import {
 } from '@/features/playground/lib/workbench/workbench-prefs'
 import type {
   GroupOption,
+  Message,
   ModelOption,
   ParameterEnabled,
   PlaygroundConfig,
@@ -85,7 +100,18 @@ interface PlaygroundStoreState extends PersistedPlaygroundState {
 
   setView: (view: PlaygroundView) => void
   setWorkspaceMode: (mode: PlaygroundWorkspaceMode) => void
-  selectModel: (model: string, group?: string) => void
+  setActiveModality: (modality: StudioModality) => void
+  /**
+   * Select an engine. Does not switch modality by itself — callers that
+   * know the model's modality should call setActiveModality / selectModality.
+   * When options.switchModality is set, also switch workspace modality and
+   * restore/create that modality's session.
+   */
+  selectModel: (
+    model: string,
+    group?: string,
+    options?: { switchModality?: StudioModality; startNewSession?: boolean }
+  ) => void
   selectDuo: () => void
   updateConfig: (patch: Partial<PlaygroundConfig>) => void
   resetConfig: () => void
@@ -106,8 +132,18 @@ interface PlaygroundStoreState extends PersistedPlaygroundState {
   }) => void
   addMyWork: (work: Omit<InspirationWork, 'id' | 'createdAt'>) => void
   removeMyWork: (id: string) => void
+  /** Update messages on the active chat session. */
   setMessages: (updater: MessageStateUpdater) => void
+  /** Start a fresh chat session (does not delete the previous one). */
   clearMessages: () => void
+  startNewSession: (modality?: SessionModality) => void
+  openSession: (sessionId: string) => void
+  deleteSession: (sessionId: string) => void
+  renameSession: (sessionId: string, title: string) => void
+  updateActiveSession: (
+    patch: Partial<PlaygroundSession> | ((prev: PlaygroundSession) => PlaygroundSession)
+  ) => void
+  setSessionDraft: (sessionId: string, draft: string) => void
   setModels: (models: ModelOption[]) => void
   setGroups: (groups: GroupOption[]) => void
   setPrefill: (prompt: string) => void
@@ -116,6 +152,66 @@ interface PlaygroundStoreState extends PersistedPlaygroundState {
   beginGeneration: (modality: StudioModality) => void
   endGeneration: () => void
   resetWorkbenchPrefs: () => void
+}
+
+function withActiveSessionUpdate(
+  state: PlaygroundStoreState,
+  updater: (session: PlaygroundSession) => PlaygroundSession
+): Partial<PlaygroundStoreState> {
+  const modality = state.activeModality
+  const current = getActiveSession(
+    state.sessions,
+    state.activeSessionByModality,
+    modality
+  )
+  if (!current) return {}
+  const next = touchSession(updater(current))
+  return {
+    sessions: upsertSession(state.sessions, next),
+    activeSessionByModality: {
+      ...state.activeSessionByModality,
+      [modality]: next.id,
+    },
+  }
+}
+
+function ensureModalitySession(
+  state: {
+    sessions: PlaygroundSession[]
+    activeSessionByModality: ActiveSessionByModality
+    config: PlaygroundConfig
+  },
+  modality: SessionModality
+): {
+  sessions: PlaygroundSession[]
+  activeSessionByModality: ActiveSessionByModality
+  session: PlaygroundSession
+} {
+  const existing = getActiveSession(
+    state.sessions,
+    state.activeSessionByModality,
+    modality
+  )
+  if (existing) {
+    return {
+      sessions: state.sessions,
+      activeSessionByModality: state.activeSessionByModality,
+      session: existing,
+    }
+  }
+  const draft = createEmptySession(
+    modality,
+    state.config.model,
+    state.config.group
+  )
+  return {
+    sessions: upsertSession(state.sessions, draft),
+    activeSessionByModality: {
+      ...state.activeSessionByModality,
+      [modality]: draft.id,
+    },
+    session: draft,
+  }
 }
 
 function generateEntryId(): string {
@@ -181,9 +277,10 @@ const playgroundPersistStorage: PersistStorage<PersistedPlaygroundState> = {
 
 export const usePlaygroundStore = create<PlaygroundStoreState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Persisted state; real values arrive synchronously via rehydration.
       workspaceMode: 'model',
+      activeModality: 'chat',
       config: { ...DEFAULT_CONFIG },
       parameterEnabled: { ...DEFAULT_PARAMETER_ENABLED },
       chatTools: { ...DEFAULT_CHAT_TOOLS },
@@ -193,6 +290,8 @@ export const usePlaygroundStore = create<PlaygroundStoreState>()(
       recentPrompts: [],
       myWorks: [],
       messages: [],
+      sessions: [],
+      activeSessionByModality: {},
       ui: { settingsPanelOpen: true },
 
       view: 'workspace',
@@ -203,19 +302,114 @@ export const usePlaygroundStore = create<PlaygroundStoreState>()(
 
       setView: (view) => set({ view }),
       setWorkspaceMode: (workspaceMode) => set({ workspaceMode }),
-      selectModel: (model, group) =>
-        set((state) => ({
-          config: {
-            ...state.config,
-            model,
-            ...(group !== undefined ? { group } : {}),
-          },
-          workspaceMode: 'model',
-          view: 'workspace',
-        })),
+      setActiveModality: (modality) =>
+        set((state) => {
+          const ensured = ensureModalitySession(state, modality)
+          const session = ensured.session
+          return {
+            activeModality: modality,
+            workspaceMode: 'model',
+            view: 'workspace',
+            sessions: ensured.sessions,
+            activeSessionByModality: ensured.activeSessionByModality,
+            config: {
+              ...state.config,
+              model: session.model || state.config.model,
+              group: session.group || state.config.group,
+            },
+          }
+        }),
+      selectModel: (model, group, options) =>
+        set((state) => {
+          const modality = options?.switchModality ?? state.activeModality
+          const startNew = options?.startNewSession === true
+          let sessions = state.sessions
+          let activeSessionByModality = state.activeSessionByModality
+          let activeSession = getActiveSession(
+            sessions,
+            activeSessionByModality,
+            modality
+          )
+
+          if (startNew || !activeSession) {
+            const draft = createEmptySession(
+              modality,
+              model,
+              group ?? state.config.group
+            )
+            sessions = upsertSession(sessions, draft)
+            activeSessionByModality = {
+              ...activeSessionByModality,
+              [modality]: draft.id,
+            }
+            activeSession = draft
+          } else {
+            const previousModel = activeSession.model
+            let nextSession: PlaygroundSession = {
+              ...activeSession,
+              model,
+              group: group ?? activeSession.group,
+            }
+            // Insert a visible model-change marker on non-empty chat threads.
+            if (
+              isChatSession(activeSession) &&
+              previousModel &&
+              previousModel !== model &&
+              activeSession.messages.length > 0
+            ) {
+              const marker: Message = {
+                key: `model-change-${Date.now()}`,
+                from: 'system',
+                versions: [
+                  {
+                    id: `v-${Date.now()}`,
+                    content: `${previousModel} → ${model}`,
+                  },
+                ],
+                modelChangeFrom: previousModel,
+                modelChangeTo: model,
+                createdAt: Date.now(),
+                status: 'complete',
+              }
+              nextSession = {
+                ...nextSession,
+                messages: [...activeSession.messages, marker],
+                isDraft: false,
+              } as PlaygroundSession
+            }
+            sessions = upsertSession(
+              sessions,
+              touchSession(nextSession)
+            )
+          }
+
+          return {
+            config: {
+              ...state.config,
+              model,
+              ...(group !== undefined ? { group } : {}),
+            },
+            activeModality: modality,
+            workspaceMode: 'model',
+            view: 'workspace',
+            sessions,
+            activeSessionByModality,
+          }
+        }),
       selectDuo: () => set({ workspaceMode: 'duo', view: 'workspace' }),
       updateConfig: (patch) =>
-        set((state) => ({ config: { ...state.config, ...patch } })),
+        set((state) => {
+          const nextConfig = { ...state.config, ...patch }
+          const sessionPatch =
+            patch.model !== undefined || patch.group !== undefined
+              ? withActiveSessionUpdate(state, (session) => ({
+                  ...session,
+                  ...(patch.model !== undefined ? { model: patch.model } : {}),
+                  ...(patch.group !== undefined ? { group: patch.group } : {}),
+                }))
+              : {}
+          return { config: nextConfig, ...sessionPatch }
+        }),
       resetConfig: () =>
         set({
           config: { ...DEFAULT_CONFIG },
@@ -286,10 +480,158 @@ export const usePlaygroundStore = create<PlaygroundStoreState>()(
           myWorks: state.myWorks.filter((item) => item.id !== id),
         })),
       setMessages: (updater) =>
-        set((state) => ({
-          messages: applyMessageStateUpdate(state.messages, updater),
-        })),
-      clearMessages: () => set({ messages: [] }),
+        set((state) => {
+          const current = getActiveSession(
+            state.sessions,
+            state.activeSessionByModality,
+            'chat'
+          )
+          // Ensure a chat session exists even if modality is temporarily media.
+          let sessions = state.sessions
+          let activeSessionByModality = state.activeSessionByModality
+          let chatSession = current
+          if (!chatSession || !isChatSession(chatSession)) {
+            const ensured = ensureModalitySession(
+              { ...state, sessions, activeSessionByModality },
+              'chat'
+            )
+            sessions = ensured.sessions
+            activeSessionByModality = ensured.activeSessionByModality
+            chatSession = ensured.session
+          }
+          if (!isChatSession(chatSession)) return {}
+
+          const nextMessages = applyMessageStateUpdate(
+            chatSession.messages,
+            updater
+          )
+          const autoTitle =
+            chatSession.title === 'New chat' ||
+            chatSession.title === 'Imported Playground chat'
+              ? titleFromFirstUserMessage(nextMessages)
+              : null
+          const nextSession = touchSession({
+            ...chatSession,
+            messages: nextMessages,
+            isDraft: nextMessages.length === 0,
+            title: autoTitle || chatSession.title,
+            model: state.config.model || chatSession.model,
+            group: state.config.group || chatSession.group,
+          })
+          return {
+            sessions: upsertSession(sessions, nextSession),
+            activeSessionByModality: {
+              ...activeSessionByModality,
+              chat: nextSession.id,
+            },
+            // Keep legacy field empty; selectors read from sessions.
+            messages: [],
+          }
+        }),
+      clearMessages: () => get().startNewSession('chat'),
+      startNewSession: (modality) =>
+        set((state) => {
+          const target = modality ?? state.activeModality
+          const draft = createEmptySession(
+            target,
+            state.config.model,
+            state.config.group
+          )
+          return {
+            activeModality: target,
+            workspaceMode: 'model',
+            view: 'workspace',
+            sessions: upsertSession(state.sessions, draft),
+            activeSessionByModality: {
+              ...state.activeSessionByModality,
+              [target]: draft.id,
+            },
+          }
+        }),
+      openSession: (sessionId) =>
+        set((state) => {
+          const session = findSession(state.sessions, sessionId)
+          if (!session) return {}
+          return {
+            activeModality: session.modality,
+            workspaceMode: 'model',
+            view: 'workspace',
+            activeSessionByModality: {
+              ...state.activeSessionByModality,
+              [session.modality]: session.id,
+            },
+            config: {
+              ...state.config,
+              model: session.model || state.config.model,
+              group: session.group || state.config.group,
+            },
+          }
+        }),
+      deleteSession: (sessionId) =>
+        set((state) => {
+          const target = findSession(state.sessions, sessionId)
+          if (!target) return {}
+          const remaining = state.sessions.filter(
+            (session) => session.id !== sessionId
+          )
+          const activeId = state.activeSessionByModality[target.modality]
+          let activeSessionByModality = state.activeSessionByModality
+          let sessions = remaining
+          if (activeId === sessionId) {
+            const nextSame = remaining.find(
+              (session) => session.modality === target.modality
+            )
+            if (nextSame) {
+              activeSessionByModality = {
+                ...activeSessionByModality,
+                [target.modality]: nextSame.id,
+              }
+            } else {
+              const draft = createEmptySession(
+                target.modality,
+                state.config.model,
+                state.config.group
+              )
+              sessions = upsertSession(remaining, draft)
+              activeSessionByModality = {
+                ...activeSessionByModality,
+                [target.modality]: draft.id,
+              }
+            }
+          }
+          return { sessions, activeSessionByModality }
+        }),
+      renameSession: (sessionId, title) =>
+        set((state) => {
+          const session = findSession(state.sessions, sessionId)
+          if (!session) return {}
+          const trimmed = title.trim()
+          if (!trimmed) return {}
+          return {
+            sessions: upsertSession(
+              state.sessions,
+              touchSession({ ...session, title: trimmed, isDraft: false })
+            ),
+          }
+        }),
+      updateActiveSession: (patch) =>
+        set((state) =>
+          withActiveSessionUpdate(state, (session) => {
+            if (typeof patch === 'function') return patch(session)
+            return { ...session, ...patch } as PlaygroundSession
+          })
+        ),
+      setSessionDraft: (sessionId, draft) =>
+        set((state) => {
+          const session = findSession(state.sessions, sessionId)
+          if (!session) return {}
+          return {
+            sessions: upsertSession(
+              state.sessions,
+              touchSession({ ...session, draft })
+            ),
+          }
+        }),
       setModels: (models) => set({ models }),
       setGroups: (groups) => set({ groups }),
       setPrefill: (prompt) =>
@@ -334,3 +676,25 @@ export const usePlaygroundStore = create<PlaygroundStoreState>()(
     }
   )
 )
+
+/** Active chat messages for the current chat session (empty if none). */
+export function selectActiveChatMessages(
+  state: PlaygroundStoreState
+): Message[] {
+  const session = getActiveSession(
+    state.sessions,
+    state.activeSessionByModality,
+    'chat'
+  )
+  return isChatSession(session) ? session.messages : []
+}
+
+export function selectActiveSession(
+  state: PlaygroundStoreState
+): PlaygroundSession | null {
+  return getActiveSession(
+    state.sessions,
+    state.activeSessionByModality,
+    state.activeModality
+  )
+}

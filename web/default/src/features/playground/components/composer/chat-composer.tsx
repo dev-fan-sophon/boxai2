@@ -83,7 +83,7 @@ export function ChatComposer(props: ChatComposerProps) {
   const handleClearMessages = () => {
     props.onClearMessages?.()
     setClearConfirmOpen(false)
-    toast.success(t('Conversation cleared'))
+    toast.success(t('Started a new chat'))
   }
 
   return (
@@ -177,7 +177,7 @@ export function ChatComposer(props: ChatComposerProps) {
               <TooltipTrigger
                 render={
                   <PromptInputButton
-                    aria-label={t('Clear chat history')}
+                    aria-label={t('New chat')}
                     className='text-muted-foreground hover:text-destructive hover:bg-destructive/10 font-medium'
                     disabled={
                       props.disabled ||
@@ -192,7 +192,7 @@ export function ChatComposer(props: ChatComposerProps) {
                 }
               />
               <TooltipContent>
-                <p>{t('Clear chat history')}</p>
+                <p>{t('New chat')}</p>
               </TooltipContent>
             </Tooltip>
           </>
@@ -202,13 +202,13 @@ export function ChatComposer(props: ChatComposerProps) {
       <ConfirmDialog
         destructive
         desc={t(
-          'All playground messages saved in this browser will be removed. This cannot be undone.'
+          'Starts a new chat. Your previous conversation stays in History and is not deleted.'
         )}
-        confirmText={t('Clear')}
+        confirmText={t('New chat')}
         handleConfirm={handleClearMessages}
         open={clearConfirmOpen}
         onOpenChange={setClearConfirmOpen}
-        title={t('Clear chat history?')}
+        title={t('Start a new chat?')}
       />
     </>
   )

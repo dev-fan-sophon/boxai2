@@ -74,6 +74,14 @@ export interface Message {
   durationMs?: number
   sources?: MessageSource[]
   managedTool?: ManagedToolCard
+  /**
+   * Model that produced this assistant turn. Absent on legacy messages
+   * (shown as "model not recorded").
+   */
+  model?: string
+  /** Visible marker when the user switches models mid-thread. */
+  modelChangeFrom?: string
+  modelChangeTo?: string
   reasoning?: {
     content: string
     duration: number

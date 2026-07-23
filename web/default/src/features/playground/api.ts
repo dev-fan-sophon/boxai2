@@ -549,6 +549,15 @@ export async function deleteConversation(id: number): Promise<void> {
   await api.delete(`${API_ENDPOINTS.CONVERSATIONS}/${id}`)
 }
 
+export async function updateConversation(
+  id: number,
+  input: { title?: string; model?: string; group?: string }
+): Promise<ServerConversation> {
+  const res = await api.put(`${API_ENDPOINTS.CONVERSATIONS}/${id}`, input)
+  if (!res.data?.success) throw new Error(res.data?.message || 'Update failed')
+  return res.data.data as ServerConversation
+}
+
 export async function putConversationMessages(
   id: number,
   messages: Array<{ role: string; content: string; content_json?: string }>

@@ -70,16 +70,19 @@ export function PriceHintBadge(props: PriceHintBadgeProps) {
 
   const hint = mergeEstimate(catalogHint, estimateQuery.data)
 
+  const label = formatHintLabel(hint, t)
+
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning ring-1 ring-warning/20',
+        // Stay in the footer flow — never absolute/float over the textarea.
+        'relative z-10 inline-flex max-w-[9.5rem] shrink-0 items-center gap-1 truncate rounded-full bg-warning/10 px-2 py-0.5 text-[11px] leading-none font-medium text-warning ring-1 ring-warning/20 sm:max-w-[14rem]',
         props.className
       )}
       title={formatHintTitle(hint, t)}
     >
-      <Zap className='size-3 fill-current' aria-hidden='true' />
-      <span>{formatHintLabel(hint, t)}</span>
+      <Zap className='size-3 shrink-0 fill-current' aria-hidden='true' />
+      <span className='truncate'>{label}</span>
     </span>
   )
 }

@@ -21,8 +21,21 @@ import type {
   Message,
   ParameterEnabled,
   PlaygroundConfig,
+  StudioModality,
   StudioSettings,
 } from '../../types'
+import type {
+  ActiveSessionByModality,
+  PlaygroundSession,
+  SessionModality,
+} from '../session/session-types'
+import {
+  createEmptySession,
+  importLegacyMessagesSession,
+  isChatSession,
+  pruneSessions,
+  upsertSession,
+} from '../session/session-utils'
 import {
   getInitialParameterEnabled,
   getInitialPlaygroundConfig,
@@ -45,7 +58,7 @@ import {
 } from './storage-schema'
 
 export const PLAYGROUND_STORE_STORAGE_KEY = STORAGE_KEYS.STORE
-export const PLAYGROUND_STORE_VERSION = 2
+export const PLAYGROUND_STORE_VERSION = 3
 
 export type PlaygroundWorkspaceMode = 'model' | 'duo'
 
@@ -60,11 +73,13 @@ export type PlaygroundUiPrefs = {
 
 /**
  * Client-side playground state persisted under the single versioned
- * `playground_store_v2` key. Server data (models, pricing, tasks) is never
- * part of this shape — it lives in react-query.
+ * `playground_store_v2` key (version field bumps independently). Server
+ * data (models, pricing, tasks) lives in react-query, not here.
  */
 export type PersistedPlaygroundState = {
   workspaceMode: PlaygroundWorkspaceMode
+  /** Explicit workspace modality — not derived solely from the model. */
+  activeModality: StudioModality
   config: PlaygroundConfig
   parameterEnabled: ParameterEnabled
   chatTools: WorkbenchChatTools
@@ -73,21 +88,62 @@ export type PersistedPlaygroundState = {
   pinnedModels: string[]
   recentPrompts: RecentPrompt[]
   myWorks: InspirationWork[]
+  /**
+   * @deprecated Kept only so v2 → v3 migration can import once. Runtime
+   * reads go through `sessions` + `activeSessionByModality`.
+   */
   messages: Message[]
+  sessions: PlaygroundSession[]
+  activeSessionByModality: ActiveSessionByModality
   ui: PlaygroundUiPrefs
+}
+
+function stripMessageForPersist(message: Message): Message {
+  return {
+    ...message,
+    attachments: undefined,
+    managedTool: message.managedTool
+      ? {
+          ...message.managedTool,
+          images: message.managedTool.images?.filter(
+            (url) => !url.startsWith('data:')
+          ),
+          videoUrl: message.managedTool.videoUrl?.startsWith('data:')
+            ? undefined
+            : message.managedTool.videoUrl,
+        }
+      : undefined,
+  }
 }
 
 /** Remove ephemeral attachment data before Zustand serializes playground state. */
 export function preparePersistedPlaygroundState(
   state: PersistedPlaygroundState
 ): PersistedPlaygroundState {
-  const messages =
-    state.messages.length > MAX_STORED_MESSAGES
-      ? state.messages.slice(-MAX_STORED_MESSAGES)
-      : state.messages
+  const sessions = pruneSessions(state.sessions).map((session) => {
+    if (isChatSession(session)) {
+      const messages =
+        session.messages.length > MAX_STORED_MESSAGES
+          ? session.messages.slice(-MAX_STORED_MESSAGES)
+          : session.messages
+      return {
+        ...session,
+        messages: messages.map(stripMessageForPersist),
+        draft: session.draft?.slice(0, 20_000),
+      }
+    }
+    return {
+      ...session,
+      previewUrls: session.previewUrls
+        ?.filter((url) => !url.startsWith('data:') && !url.startsWith('blob:'))
+        .slice(0, 12),
+      draft: session.draft?.slice(0, 20_000),
+    }
+  })
 
   return {
     workspaceMode: state.workspaceMode,
+    activeModality: state.activeModality,
     config: state.config,
     parameterEnabled: state.parameterEnabled,
     chatTools: state.chatTools,
@@ -96,21 +152,10 @@ export function preparePersistedPlaygroundState(
     pinnedModels: state.pinnedModels,
     recentPrompts: state.recentPrompts,
     myWorks: state.myWorks,
-    messages: messages.map((message) => ({
-      ...message,
-      attachments: undefined,
-      managedTool: message.managedTool
-        ? {
-            ...message.managedTool,
-            images: message.managedTool.images?.filter(
-              (url) => !url.startsWith('data:')
-            ),
-            videoUrl: message.managedTool.videoUrl?.startsWith('data:')
-              ? undefined
-              : message.managedTool.videoUrl,
-          }
-        : undefined,
-    })),
+    // Legacy field kept empty after v3 — sessions own the history.
+    messages: [],
+    sessions,
+    activeSessionByModality: state.activeSessionByModality,
     ui: state.ui,
   }
 }
@@ -246,11 +291,185 @@ function readLegacyMessages(): Message[] {
  * keys are never deleted by this module — playground_messages in particular
  * stays on disk as the safety net for this release.
  */
+function hasImportedLegacyMessages(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEYS.LEGACY_MESSAGES_IMPORTED) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markLegacyMessagesImported(): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.LEGACY_MESSAGES_IMPORTED, '1')
+  } catch {
+    // Storage may be unavailable.
+  }
+}
+
+function buildSessionsFromLegacyMessages(
+  messages: Message[],
+  config: PlaygroundConfig
+): {
+  sessions: PlaygroundSession[]
+  activeSessionByModality: ActiveSessionByModality
+  activeModality: StudioModality
+} {
+  const activeModality: StudioModality = 'chat'
+  let sessions: PlaygroundSession[] = []
+  const activeSessionByModality: ActiveSessionByModality = {}
+
+  if (messages.length > 0 && !hasImportedLegacyMessages()) {
+    const imported = importLegacyMessagesSession({
+      messages,
+      model: config.model,
+      group: config.group,
+    })
+    if (imported) {
+      sessions = [imported]
+      activeSessionByModality.chat = imported.id
+      markLegacyMessagesImported()
+    }
+  }
+
+  if (sessions.length === 0) {
+    const draft = createEmptySession('chat', config.model, config.group)
+    sessions = [draft]
+    activeSessionByModality.chat = draft.id
+  }
+
+  return { sessions, activeSessionByModality, activeModality }
+}
+
+function normalizeModality(value: unknown): StudioModality {
+  if (
+    value === 'chat' ||
+    value === 'image' ||
+    value === 'video' ||
+    value === 'audio'
+  ) {
+    return value
+  }
+  return 'chat'
+}
+
+function normalizeSessionRecord(
+  value: unknown,
+  fallbackModel: string,
+  fallbackGroup: string
+): PlaygroundSession | null {
+  if (!isRecord(value)) return null
+  const modality = normalizeModality(value.modality)
+  const id = typeof value.id === 'string' ? value.id : ''
+  if (!id) return null
+  let title = 'Untitled project'
+  if (typeof value.title === 'string' && value.title.trim()) {
+    title = value.title.trim()
+  } else if (modality === 'chat') {
+    title = 'New chat'
+  }
+  const model = typeof value.model === 'string' ? value.model : fallbackModel
+  const group = typeof value.group === 'string' ? value.group : fallbackGroup
+  const createdAt =
+    typeof value.createdAt === 'number' && Number.isFinite(value.createdAt)
+      ? value.createdAt
+      : Date.now()
+  const updatedAt =
+    typeof value.updatedAt === 'number' && Number.isFinite(value.updatedAt)
+      ? value.updatedAt
+      : createdAt
+  const draft = typeof value.draft === 'string' ? value.draft : undefined
+  const isDraft = value.isDraft === true
+  const serverId =
+    typeof value.serverId === 'number' && Number.isFinite(value.serverId)
+      ? value.serverId
+      : undefined
+
+  if (modality === 'chat') {
+    const messages = normalizeMessagesField(value.messages)
+    return {
+      id,
+      serverId,
+      modality: 'chat',
+      title,
+      model,
+      group,
+      messages,
+      draft,
+      isDraft: isDraft || messages.length === 0,
+      createdAt,
+      updatedAt,
+    }
+  }
+
+  const previewUrls = Array.isArray(value.previewUrls)
+    ? value.previewUrls
+        .filter(
+          (url): url is string =>
+            typeof url === 'string' &&
+            !url.startsWith('data:') &&
+            !url.startsWith('blob:')
+        )
+        .slice(0, 12)
+    : undefined
+  const lastPrompt =
+    typeof value.lastPrompt === 'string' ? value.lastPrompt : undefined
+
+  return {
+    id,
+    modality,
+    title,
+    model,
+    group,
+    previewUrls,
+    lastPrompt,
+    draft,
+    isDraft:
+      isDraft ||
+      (!lastPrompt && (!previewUrls || previewUrls.length === 0)),
+    createdAt,
+    updatedAt,
+  }
+}
+
+function normalizeSessionsField(
+  value: unknown,
+  fallbackModel: string,
+  fallbackGroup: string
+): PlaygroundSession[] {
+  if (!Array.isArray(value)) return []
+  const sessions: PlaygroundSession[] = []
+  for (const item of value) {
+    const session = normalizeSessionRecord(item, fallbackModel, fallbackGroup)
+    if (session) sessions.push(session)
+  }
+  return pruneSessions(sessions)
+}
+
+function normalizeActiveSessionMap(
+  value: unknown
+): ActiveSessionByModality {
+  if (!isRecord(value)) return {}
+  const result: ActiveSessionByModality = {}
+  for (const modality of ['chat', 'image', 'video', 'audio'] as SessionModality[]) {
+    const id = value[modality]
+    if (typeof id === 'string' || id === null) {
+      result[modality] = id
+    }
+  }
+  return result
+}
+
 export function readLegacyPlaygroundState(): PersistedPlaygroundState {
   const prefs = loadWorkbenchPrefs()
+  const config = getInitialPlaygroundConfig()
+  const messages = readLegacyMessages()
+  const { sessions, activeSessionByModality, activeModality } =
+    buildSessionsFromLegacyMessages(messages, config)
   return {
     workspaceMode: 'model',
-    config: getInitialPlaygroundConfig(),
+    activeModality,
+    config,
     parameterEnabled: getInitialParameterEnabled(),
     chatTools: prefs.chatTools,
     studioSettings: readLegacyStudioSettings(),
@@ -258,7 +477,9 @@ export function readLegacyPlaygroundState(): PersistedPlaygroundState {
     pinnedModels: prefs.pinnedModels,
     recentPrompts: prefs.recentPrompts,
     myWorks: prefs.myWorks,
-    messages: readLegacyMessages(),
+    messages: [],
+    sessions,
+    activeSessionByModality,
     ui: { settingsPanelOpen: true },
   }
 }
@@ -322,9 +543,53 @@ export function loadPersistedPlaygroundState(): PersistedPlaygroundState {
   const state = extractPersistedEnvelopeState(envelope)
   if (!isRecord(state)) return readLegacyPlaygroundState()
 
+  const config = normalizeConfigField(state.config)
+  let sessions = normalizeSessionsField(
+    state.sessions,
+    config.model,
+    config.group
+  )
+  let activeSessionByModality = normalizeActiveSessionMap(
+    state.activeSessionByModality
+  )
+  let activeModality = normalizeModality(state.activeModality)
+
+  // v2 → v3: no sessions yet — import legacy global messages once.
+  if (sessions.length === 0) {
+    const legacyMessages = normalizeMessagesField(state.messages)
+    const built = buildSessionsFromLegacyMessages(legacyMessages, config)
+    sessions = built.sessions
+    activeSessionByModality = {
+      ...activeSessionByModality,
+      ...built.activeSessionByModality,
+    }
+    if (!state.activeModality) {
+      activeModality = built.activeModality
+    }
+  }
+
+  // Ensure the active modality always has a session pointer.
+  if (!activeSessionByModality[activeModality]) {
+    const existing = sessions.find((session) => session.modality === activeModality)
+    if (existing) {
+      activeSessionByModality = {
+        ...activeSessionByModality,
+        [activeModality]: existing.id,
+      }
+    } else {
+      const draft = createEmptySession(activeModality, config.model, config.group)
+      sessions = upsertSession(sessions, draft)
+      activeSessionByModality = {
+        ...activeSessionByModality,
+        [activeModality]: draft.id,
+      }
+    }
+  }
+
   return {
     workspaceMode: state.workspaceMode === 'duo' ? 'duo' : 'model',
-    config: normalizeConfigField(state.config),
+    activeModality,
+    config,
     parameterEnabled: normalizeParameterEnabledField(state.parameterEnabled),
     chatTools: normalizeChatTools(
       isRecord(state.chatTools)
@@ -340,7 +605,9 @@ export function loadPersistedPlaygroundState(): PersistedPlaygroundState {
     myWorks: Array.isArray(state.myWorks)
       ? state.myWorks.filter(isInspirationWork).slice(0, MAX_MY_WORKS)
       : [],
-    messages: normalizeMessagesField(state.messages),
+    messages: [],
+    sessions,
+    activeSessionByModality,
     ui: {
       settingsPanelOpen: isRecord(state.ui)
         ? state.ui.settingsPanelOpen !== false
