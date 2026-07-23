@@ -31,6 +31,7 @@ type Model struct {
 	Endpoints        string         `json:"endpoints,omitempty" gorm:"type:text"`
 	Integrations     string         `json:"integrations,omitempty" gorm:"type:text"`
 	DisplayName      string         `json:"display_name,omitempty" gorm:"type:varchar(255)"`
+	OfficialDiscount *float64       `json:"official_discount,omitempty"`
 	ContextLength    int            `json:"context_length,omitempty"`
 	MaxOutputTokens  int            `json:"max_output_tokens,omitempty"`
 	KnowledgeCutoff  string         `json:"knowledge_cutoff,omitempty" gorm:"type:varchar(64)"`
@@ -87,9 +88,13 @@ func IsModelNameDuplicated(id int, name string) (bool, error) {
 
 func (mi *Model) Update() error {
 	mi.UpdatedTime = common.GetTimestamp()
+	fields := []string{"model_name", "description", "icon", "tags", "vendor_id", "endpoints", "integrations", "display_name", "context_length", "max_output_tokens", "knowledge_cutoff", "release_date", "parameter_count", "input_modalities", "output_modalities", "capabilities", "usage_notes", "status", "sync_official", "name_rule", "updated_time"}
+	if mi.OfficialDiscount != nil {
+		fields = append(fields, "official_discount")
+	}
 	// 使用 Select 强制更新所有字段，包括零值
 	return DB.Model(&Model{}).Where("id = ?", mi.Id).
-		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "integrations", "display_name", "context_length", "max_output_tokens", "knowledge_cutoff", "release_date", "parameter_count", "input_modalities", "output_modalities", "capabilities", "usage_notes", "status", "sync_official", "name_rule", "updated_time").
+		Select(fields).
 		Updates(mi).Error
 }
 

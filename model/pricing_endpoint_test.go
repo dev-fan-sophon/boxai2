@@ -274,8 +274,9 @@ func TestPricingParsesRichModelMetadata(t *testing.T) {
 	resetPricingEndpointTestTables(t)
 	insertPricingEndpointChannel(t, 220, constant.ChannelTypeOpenAI, dto.ChannelOtherSettings{})
 	insertPricingEndpointAbility(t, 220, "documented-model")
+	officialDiscount := 88.88
 	require.NoError(t, DB.Create(&Model{ModelName: "documented-model", Status: 1, NameRule: NameRuleExact,
-		DisplayName: "Documented Model", ContextLength: 128000, MaxOutputTokens: 8192,
+		DisplayName: "Documented Model", OfficialDiscount: &officialDiscount, ContextLength: 128000, MaxOutputTokens: 8192,
 		InputModalities: `["text","image"]`, OutputModalities: `["text"]`, Capabilities: `["tools"]`, UsageNotes: "Use for analysis.",
 	}).Error)
 
@@ -286,10 +287,29 @@ func TestPricingParsesRichModelMetadata(t *testing.T) {
 		}
 	}
 	assert.Equal(t, "Documented Model", pricing.DisplayName)
+	assert.Equal(t, 88.88, pricing.OfficialDiscount)
 	assert.Equal(t, 128000, pricing.ContextLength)
 	assert.Equal(t, 8192, pricing.MaxOutputTokens)
 	assert.Equal(t, []string{"text", "image"}, pricing.InputModalities)
 	assert.Equal(t, []string{"tools"}, pricing.Capabilities)
+}
+
+func TestModelUpdatePreservesOmittedOfficialDiscountAndAllowsClearing(t *testing.T) {
+	resetPricingEndpointTestTables(t)
+	officialDiscount := 88.88
+	stored := Model{ModelName: "discounted-model", OfficialDiscount: &officialDiscount, Status: 1}
+	require.NoError(t, stored.Insert())
+
+	require.NoError(t, (&Model{Id: stored.Id, ModelName: stored.ModelName, Status: 1}).Update())
+	require.NoError(t, DB.First(&stored, stored.Id).Error)
+	require.NotNil(t, stored.OfficialDiscount)
+	assert.Equal(t, 88.88, *stored.OfficialDiscount)
+
+	cleared := 0.0
+	require.NoError(t, (&Model{Id: stored.Id, ModelName: stored.ModelName, OfficialDiscount: &cleared, Status: 1}).Update())
+	require.NoError(t, DB.First(&stored, stored.Id).Error)
+	require.NotNil(t, stored.OfficialDiscount)
+	assert.Zero(t, *stored.OfficialDiscount)
 }
 
 func TestInitChannelCacheInvalidatesPricingCache(t *testing.T) {

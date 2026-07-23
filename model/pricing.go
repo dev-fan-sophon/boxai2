@@ -39,6 +39,7 @@ type Pricing struct {
 	PricingVersion         string                  `json:"pricing_version,omitempty"`
 	Integrations           []ModelIntegration      `json:"integrations"`
 	DisplayName            string                  `json:"display_name,omitempty"`
+	OfficialDiscount       float64                 `json:"official_discount,omitempty"`
 	ContextLength          int                     `json:"context_length,omitempty"`
 	MaxOutputTokens        int                     `json:"max_output_tokens,omitempty"`
 	KnowledgeCutoff        string                  `json:"knowledge_cutoff,omitempty"`
@@ -410,6 +411,9 @@ func updatePricing() {
 			pricing.Tags = meta.Tags
 			pricing.VendorID = meta.VendorID
 			pricing.DisplayName = meta.DisplayName
+			if meta.OfficialDiscount != nil {
+				pricing.OfficialDiscount = *meta.OfficialDiscount
+			}
 			pricing.ContextLength = meta.ContextLength
 			pricing.MaxOutputTokens = meta.MaxOutputTokens
 			pricing.KnowledgeCutoff = meta.KnowledgeCutoff

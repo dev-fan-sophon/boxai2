@@ -66,3 +66,14 @@ func TestNormalizeModelMetadataRejectsUnsupportedEndpointShapes(t *testing.T) {
 		assert.Error(t, normalizeModelMetadata(&metadata))
 	}
 }
+
+func TestNormalizeModelMetadataValidatesOfficialDiscount(t *testing.T) {
+	for _, discount := range []float64{-0.01, 100} {
+		metadata := model.Model{OfficialDiscount: &discount}
+		assert.Error(t, normalizeModelMetadata(&metadata))
+	}
+
+	discount := 88.88
+	metadata := model.Model{OfficialDiscount: &discount}
+	require.NoError(t, normalizeModelMetadata(&metadata))
+}

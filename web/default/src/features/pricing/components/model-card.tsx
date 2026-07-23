@@ -96,6 +96,12 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
     props.model,
     props.selectedGroup
   )
+  const officialDiscount =
+    typeof props.model.official_discount === 'number' &&
+    props.model.official_discount > 0 &&
+    props.model.official_discount < 100
+      ? Number(props.model.official_discount.toFixed(2))
+      : null
 
   const handleCopy = () => {
     copyToClipboard(props.model.model_name || '')
@@ -257,6 +263,13 @@ export const ModelCard = memo(function ModelCard(props: ModelCardProps) {
         {savingsPercent != null && (
           <span className='inline-flex items-center rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300'>
             {t('{{percent}}% off', { percent: savingsPercent })}
+          </span>
+        )}
+        {officialDiscount != null && (
+          <span className='inline-flex items-center rounded-full bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300'>
+            {t('{{percent}}% below official price', {
+              percent: officialDiscount,
+            })}
           </span>
         )}
       </div>

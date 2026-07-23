@@ -49,6 +49,7 @@ export type PricingModel = {
   tags?: string
   supported_endpoint_types?: string[]
   display_name?: string
+  official_discount?: number
   integrations?: ModelIntegration[]
   usage_notes?: string
   key?: string

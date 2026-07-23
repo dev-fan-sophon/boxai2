@@ -48,6 +48,7 @@ export interface Model {
   vendor_id?: number
   endpoints?: string
   display_name?: string
+  official_discount?: number
   context_length?: number
   max_output_tokens?: number
   knowledge_cutoff?: string
