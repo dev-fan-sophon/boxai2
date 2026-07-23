@@ -31,13 +31,18 @@ export function getMessageContentStyles() {
     'group-[.is-user]:rounded-2xl',
     'group-[.is-user]:rounded-br-md',
     'group-[.is-user]:border',
-    'group-[.is-user]:border-border/70',
-    'group-[.is-user]:bg-muted/70',
-    'group-[.is-user]:px-4',
-    'group-[.is-user]:py-2.5',
+    'group-[.is-user]:border-border/80',
+    'group-[.is-user]:bg-muted/80',
+    'dark:group-[.is-user]:border-border/60',
+    'dark:group-[.is-user]:bg-muted/55',
+    'group-[.is-user]:px-3',
+    'group-[.is-user]:py-2',
+    'sm:group-[.is-user]:px-4',
+    'sm:group-[.is-user]:py-2.5',
     'group-[.is-user]:text-foreground',
     'group-[.is-user]:shadow-sm',
     'group-[.is-user]:shadow-black/5',
+    'dark:group-[.is-user]:shadow-black/25',
 
     // Assistant response: flat reading surface using the active UI font axis.
     'group-[.is-assistant]:bg-transparent',
@@ -45,18 +50,19 @@ export function getMessageContentStyles() {
     'group-[.is-assistant]:rounded-none',
     'group-[.is-assistant]:overflow-visible',
     'group-[.is-assistant]:[font-family:var(--font-body)]',
-    'group-[.is-assistant]:text-foreground/90',
+    'group-[.is-assistant]:text-foreground/95',
+    'dark:group-[.is-assistant]:text-foreground/90',
 
     // Preferred readable widths and wrapping
-    'text-[0.95rem]',
+    'text-[0.9375rem]',
     'leading-6',
     'break-words',
     'whitespace-pre-wrap',
     'sm:text-[0.975rem]',
     'sm:leading-7',
 
-    // Cap user bubble width so it does not look like a banner
-    'group-[.is-user]:max-w-[85%]',
+    // Cap user bubble width so it does not look like a banner on phones
+    'group-[.is-user]:max-w-[min(92%,28rem)]',
     'sm:group-[.is-user]:max-w-[62ch]',
     'md:group-[.is-user]:max-w-[68ch]',
     'lg:group-[.is-user]:max-w-[72ch]',

@@ -53,6 +53,7 @@ import {
   SettingsPanel,
   SettingsSections,
 } from './components/settings/settings-panel'
+import { ModalityQuickSwitch } from './components/shell/modality-quick-switch'
 import { PlaygroundShell } from './components/shell/playground-shell'
 import { PlaygroundToolbar } from './components/shell/playground-toolbar'
 import { WorkspaceHeader } from './components/shell/workspace-header'
@@ -458,6 +459,19 @@ export function Playground() {
     [models, playgroundModels]
   )
 
+  const availableModalities = useMemo(() => {
+    const found = new Set<StudioModality>()
+    for (const option of models) {
+      const pricingModel = playgroundModels.find(
+        (model) => model.model_name === option.value
+      )
+      found.add(
+        getModelModality(pricingModel ?? { model_name: option.value })
+      )
+    }
+    return [...found]
+  }, [models, playgroundModels])
+
   const selectModelByModality = useCallback(
     (modality: StudioModality, preferredPrompt?: string) => {
       const current = playgroundModels.find(
@@ -639,6 +653,16 @@ export function Playground() {
               <SlidersHorizontal className='size-4' />
             </Button>
           }
+        />
+      )}
+
+      {showWorkspace && !duoActive && (
+        <ModalityQuickSwitch
+          active={activeModality}
+          available={availableModalities}
+          onSelect={(modality) => {
+            selectModelByModality(modality)
+          }}
         />
       )}
 

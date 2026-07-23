@@ -143,32 +143,35 @@ export function ChatComposer(props: ChatComposerProps) {
               </TooltipContent>
             </Tooltip>
 
-            {(
-              [
-                ['auto', t('Auto'), Bot],
-                ['image', t('Image'), Image],
-                ['video', t('Video'), Video],
-                ['search', t('Search'), Globe],
-              ] as const
-            ).map(([mode, label, Icon]) => (
-              <button
-                key={mode}
-                type='button'
-                aria-pressed={toolMode === mode}
-                onClick={() =>
-                  setChatTools({ mode, webSearch: mode === 'search' })
-                }
-                className={cn(
-                  'inline-flex h-8 items-center gap-1 rounded-lg border border-transparent px-2 text-[11px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  toolMode === mode
-                    ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
-                )}
-              >
-                <Icon className='size-3.5' aria-hidden='true' />
-                {label}
-              </button>
-            ))}
+            <div className='no-scrollbar flex max-w-[min(100%,14rem)] items-center gap-0.5 overflow-x-auto sm:max-w-none sm:gap-1'>
+              {(
+                [
+                  ['auto', t('Auto'), Bot],
+                  ['image', t('Image'), Image],
+                  ['video', t('Video'), Video],
+                  ['search', t('Search'), Globe],
+                ] as const
+              ).map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  type='button'
+                  aria-pressed={toolMode === mode}
+                  aria-label={label}
+                  onClick={() =>
+                    setChatTools({ mode, webSearch: mode === 'search' })
+                  }
+                  className={cn(
+                    'inline-flex h-8 shrink-0 touch-manipulation items-center gap-1 rounded-lg border border-transparent px-2 text-[11px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    toolMode === mode
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground'
+                  )}
+                >
+                  <Icon className='size-3.5' aria-hidden='true' />
+                  <span className='hidden sm:inline'>{label}</span>
+                </button>
+              ))}
+            </div>
 
             <Tooltip>
               <TooltipTrigger

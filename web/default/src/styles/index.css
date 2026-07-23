@@ -420,10 +420,54 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
+.playground-modality-switch {
+  scrollbar-width: none;
+}
+
+.playground-modality-switch::-webkit-scrollbar {
+  display: none;
+}
+
+/* Dark-mode contrast polish for playground reading surfaces */
+.dark .playground-stage {
+  background:
+    radial-gradient(
+      120% 70% at 50% -10%,
+      color-mix(in oklab, var(--primary) 14%, transparent),
+      transparent 58%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in oklab, var(--muted) 28%, transparent),
+      transparent 30%
+    );
+}
+
+.dark .playground-topbar,
+.dark .playground-workspace-header,
+.dark .playground-modality-switch {
+  background: color-mix(in oklab, var(--background) 82%, transparent);
+  border-color: color-mix(in oklab, var(--border) 85%, transparent);
+}
+
+.dark .playground-composer-surface {
+  background: color-mix(in oklab, var(--background) 92%, var(--muted) 8%);
+  border-color: color-mix(in oklab, var(--border) 90%, transparent);
+}
+
+.dark .playground-composer-dock {
+  --playground-composer-glow: color-mix(
+    in oklab,
+    var(--primary) 28%,
+    transparent
+  );
+}
+
 @media (prefers-reduced-motion: reduce) {
   .playground-composer-surface,
   .playground-topbar button,
-  .playground-workspace-header button {
+  .playground-workspace-header button,
+  .playground-modality-switch button {
     transition: none !important;
   }
 }

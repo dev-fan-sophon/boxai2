@@ -19,17 +19,17 @@ export function ChatAttachmentStrip(props: {
   if (props.attachments.length === 0) return null
 
   return (
-    <div className='flex flex-wrap gap-2 px-5 pb-2'>
+    <div className='no-scrollbar flex gap-2 overflow-x-auto px-3 pb-2 sm:flex-wrap sm:overflow-visible sm:px-5'>
       {props.attachments.map((attachment, index) => (
-        <div key={attachment.id} className='relative'>
+        <div key={attachment.id} className='relative shrink-0'>
           {attachment.type === 'image' ? (
             <img
               src={attachment.dataUrl}
               alt={t('Attachment {{index}}', { index: index + 1 })}
-              className='border-border size-14 rounded-lg border object-cover'
+              className='border-border size-16 rounded-xl border object-cover sm:size-14 sm:rounded-lg'
             />
           ) : (
-            <div className='border-border bg-muted flex h-14 max-w-40 items-center gap-2 rounded-lg border px-3'>
+            <div className='border-border bg-muted flex h-16 max-w-[11rem] items-center gap-2 rounded-xl border px-3 sm:h-14 sm:max-w-40 sm:rounded-lg'>
               <FileText className='text-muted-foreground size-5 shrink-0' />
               <span className='truncate text-xs' title={attachment.name}>
                 {attachment.name}
@@ -40,9 +40,9 @@ export function ChatAttachmentStrip(props: {
             type='button'
             aria-label={t('Remove attachment')}
             onClick={() => props.onRemove(index)}
-            className='bg-background border-border absolute -top-1.5 -right-1.5 rounded-full border p-0.5 shadow-sm'
+            className='bg-background border-border absolute -top-1.5 -right-1.5 flex size-6 touch-manipulation items-center justify-center rounded-full border shadow-sm sm:size-auto sm:p-0.5'
           >
-            <X className='size-3' />
+            <X className='size-3.5 sm:size-3' />
           </button>
         </div>
       ))}
