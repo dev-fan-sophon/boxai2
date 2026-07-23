@@ -131,8 +131,25 @@ For commercial licensing, please contact support@quantumnous.com
 
   .generation-indeterminate,
   .generation-wave,
-  .generation-glow-pulse {
+  .generation-glow-pulse,
+  .generation-orb-pulse,
+  .generation-timer-dot,
+  .generation-scanline,
+  .generation-progress-enter,
+  .generation-slot-enter,
+  .generation-result-enter,
+  .generation-image-reveal,
+  .generation-size-badge {
     animation: none !important;
+  }
+
+  .generation-progress-enter,
+  .generation-slot-enter,
+  .generation-result-enter,
+  .generation-image-reveal,
+  .generation-size-badge {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 
@@ -170,6 +187,104 @@ For commercial licensing, please contact support@quantumnous.com
   }
 }
 
+@keyframes generation-orb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 35%, transparent);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px color-mix(in oklab, var(--primary) 0%, transparent);
+  }
+}
+
+@keyframes generation-timer-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes generation-scanline {
+  0% {
+    top: -35%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.7;
+  }
+  85% {
+    opacity: 0.55;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+@keyframes generation-progress-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes generation-slot-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes generation-result-enter {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes generation-image-reveal {
+  from {
+    opacity: 0;
+    transform: scale(1.02);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes generation-size-badge {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .generation-indeterminate {
   animation: generation-indeterminate 1.4s ease-in-out infinite;
 }
@@ -181,6 +296,44 @@ For commercial licensing, please contact support@quantumnous.com
 
 .generation-glow-pulse {
   animation: generation-glow-pulse 4s ease-in-out infinite;
+}
+
+.generation-orb-pulse {
+  animation: generation-orb-pulse 2.2s ease-in-out infinite;
+}
+
+.generation-timer-dot {
+  animation: generation-timer-dot 1.2s ease-in-out infinite;
+}
+
+.generation-scanline {
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in oklab, var(--primary) 22%, transparent) 45%,
+    transparent 100%
+  );
+  animation: generation-scanline 2.4s ease-in-out infinite;
+}
+
+.generation-progress-enter {
+  animation: generation-progress-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.generation-slot-enter {
+  animation: generation-slot-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.generation-result-enter {
+  animation: generation-result-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.generation-image-reveal {
+  animation: generation-image-reveal 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.generation-size-badge {
+  animation: generation-size-badge 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
 }
 
 @utility container {

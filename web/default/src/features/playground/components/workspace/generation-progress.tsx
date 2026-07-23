@@ -22,11 +22,35 @@ type GenerationProgressProps = {
   modality: Exclude<StudioModality, 'chat'>
   /** Number of image placeholders while generating */
   imageCount?: number
+  /** Target image size (e.g. 1024x1536) — drives placeholder aspect ratio */
+  imageSize?: string
   /** Soft progress 0–100 when the backend reports none (video indeterminate) */
   percent?: number | null
   /** Optional secondary status line (e.g. video task id) */
   detail?: string
   className?: string
+}
+
+function parseSizeAspect(size?: string): {
+  ratio: number
+  label: string | null
+  css: string
+} {
+  if (!size) return { ratio: 1, label: null, css: '1 / 1' }
+  const match = /^(\d+)\s*[x×]\s*(\d+)$/i.exec(size.trim())
+  if (!match) return { ratio: 1, label: size, css: '1 / 1' }
+  const w = Number(match[1])
+  const h = Number(match[2])
+  if (!w || !h) return { ratio: 1, label: size, css: '1 / 1' }
+  return { ratio: w / h, label: `${w}×${h}`, css: `${w} / ${h}` }
+}
+
+function formatElapsed(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000))
+  const min = Math.floor(totalSec / 60)
+  const sec = totalSec % 60
+  if (min <= 0) return `${sec}s`
+  return `${min}:${String(sec).padStart(2, '0')}`
 }
 
 const STATUS_KEYS: Record<Exclude<StudioModality, 'chat'>, string[]> = {
@@ -59,6 +83,8 @@ export function GenerationProgress(props: GenerationProgressProps) {
   const shouldReduce = useReducedMotion()
   const statuses = STATUS_KEYS[props.modality]
   const [statusIndex, setStatusIndex] = useState(0)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const sizeMeta = parseSizeAspect(props.imageSize)
 
   useEffect(() => {
     if (shouldReduce) return
@@ -68,6 +94,15 @@ export function GenerationProgress(props: GenerationProgressProps) {
     return () => window.clearInterval(id)
   }, [shouldReduce, statuses.length])
 
+  useEffect(() => {
+    const started = performance.now()
+    setElapsedMs(0)
+    const id = window.setInterval(() => {
+      setElapsedMs(performance.now() - started)
+    }, 200)
+    return () => window.clearInterval(id)
+  }, [])
+
   const count = Math.min(Math.max(props.imageCount ?? 1, 1), 4)
   const hasHardPercent =
     typeof props.percent === 'number' &&
@@ -76,21 +111,25 @@ export function GenerationProgress(props: GenerationProgressProps) {
   const softPercent = hasHardPercent
     ? Math.min(100, Math.max(0, props.percent as number))
     : null
+  const elapsedLabel = formatElapsed(elapsedMs)
 
   return (
     <div
       className={cn(
-        'animate-in fade-in-0 slide-in-from-bottom-2 flex w-full flex-col gap-5 duration-300',
+        'generation-progress-enter flex w-full flex-col gap-5',
         props.className
       )}
       role='status'
       aria-live='polite'
+      aria-label={t('Generating… {{elapsed}}', { elapsed: elapsedLabel })}
     >
       {props.modality === 'image' && (
         <div
           className={cn(
             'grid w-full gap-3',
-            count === 1 ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'
+            count === 1
+              ? 'mx-auto max-w-xl grid-cols-1'
+              : 'grid-cols-1 sm:grid-cols-2'
           )}
         >
           {(['slot-a', 'slot-b', 'slot-c', 'slot-d'] as const)
@@ -98,8 +137,10 @@ export function GenerationProgress(props: GenerationProgressProps) {
             .map((id, i) => (
               <ImagePlaceholder
                 key={id}
-                delay={shouldReduce ? 0 : i * 0.08}
+                delayMs={shouldReduce ? 0 : i * 80}
                 reduceMotion={Boolean(shouldReduce)}
+                aspectCss={sizeMeta.css}
+                sizeLabel={sizeMeta.label}
               />
             ))}
         </div>
@@ -118,7 +159,7 @@ export function GenerationProgress(props: GenerationProgressProps) {
           <span
             className={cn(
               'bg-primary/15 text-primary inline-flex size-8 items-center justify-center rounded-full',
-              !shouldReduce && 'animate-pulse'
+              !shouldReduce && 'generation-orb-pulse'
             )}
             aria-hidden='true'
           >
@@ -139,6 +180,30 @@ export function GenerationProgress(props: GenerationProgressProps) {
           </AnimatePresence>
         </div>
 
+        <div className='text-muted-foreground flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs tabular-nums'>
+          <span className='generation-timer inline-flex items-center gap-1.5'>
+            <span
+              className={cn(
+                'bg-primary size-1.5 rounded-full',
+                !shouldReduce && 'generation-timer-dot'
+              )}
+              aria-hidden='true'
+            />
+            <span className='text-foreground/90 font-medium'>
+              {elapsedLabel}
+            </span>
+            <span className='sr-only'>{t('Elapsed time')}</span>
+          </span>
+          {sizeMeta.label && props.modality === 'image' && (
+            <span className='bg-muted/80 text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[11px]'>
+              {sizeMeta.label}
+            </span>
+          )}
+          {softPercent !== null && (
+            <span className='font-medium'>{Math.round(softPercent)}%</span>
+          )}
+        </div>
+
         {props.detail && (
           <p className='text-muted-foreground max-w-full truncate font-mono text-[11px]'>
             {props.detail}
@@ -147,11 +212,9 @@ export function GenerationProgress(props: GenerationProgressProps) {
 
         <div className='bg-muted relative h-1.5 w-full overflow-hidden rounded-full'>
           {softPercent !== null ? (
-            <motion.div
-              className='bg-primary absolute inset-y-0 left-0 rounded-full'
-              initial={false}
-              animate={{ width: `${softPercent}%` }}
-              transition={MOTION_TRANSITION.default}
+            <div
+              className='bg-primary absolute inset-y-0 left-0 rounded-full transition-[width] duration-500 ease-out'
+              style={{ width: `${softPercent}%` }}
             />
           ) : (
             <div
@@ -162,12 +225,6 @@ export function GenerationProgress(props: GenerationProgressProps) {
             />
           )}
         </div>
-
-        {softPercent !== null && (
-          <p className='text-muted-foreground text-xs tabular-nums'>
-            {Math.round(softPercent)}%
-          </p>
-        )}
       </div>
     </div>
   )
@@ -181,24 +238,46 @@ function ModalityGlyph(props: {
   return <Music2 className='size-4' />
 }
 
-function ImagePlaceholder(props: { delay: number; reduceMotion: boolean }) {
+function ImagePlaceholder(props: {
+  delayMs: number
+  reduceMotion: boolean
+  aspectCss: string
+  sizeLabel: string | null
+}) {
   return (
-    <motion.div
-      initial={props.reduceMotion ? false : { opacity: 0, scale: 0.98 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ ...MOTION_TRANSITION.default, delay: props.delay }}
-      className='border-border/70 bg-muted/40 relative aspect-square overflow-hidden rounded-2xl border'
+    <div
+      className={cn(
+        'border-border/70 bg-muted/40 relative w-full overflow-hidden rounded-2xl border',
+        !props.reduceMotion && 'generation-slot-enter'
+      )}
+      style={{
+        aspectRatio: props.aspectCss,
+        animationDelay: props.reduceMotion ? undefined : `${props.delayMs}ms`,
+      }}
     >
       <div className='skeleton-shimmer absolute inset-0' />
-      <div className='absolute inset-0 flex items-center justify-center'>
-        <div className='bg-background/40 text-muted-foreground flex size-14 items-center justify-center rounded-full backdrop-blur-sm'>
+      {!props.reduceMotion && (
+        <div
+          className='generation-scanline pointer-events-none absolute inset-x-0 h-1/3 opacity-70'
+          aria-hidden='true'
+        />
+      )}
+      <div className='absolute inset-0 flex flex-col items-center justify-center gap-2'>
+        <div
+          className={cn(
+            'bg-background/40 text-muted-foreground flex size-14 items-center justify-center rounded-full backdrop-blur-sm',
+            !props.reduceMotion && 'generation-orb-pulse'
+          )}
+        >
           <ImageIcon className='size-6 opacity-70' aria-hidden='true' />
         </div>
+        {props.sizeLabel && (
+          <span className='bg-background/55 text-muted-foreground rounded-full px-2.5 py-0.5 font-mono text-[11px] backdrop-blur-sm'>
+            {props.sizeLabel}
+          </span>
+        )}
       </div>
-      {!props.reduceMotion && (
-        <div className='from-primary/0 via-primary/10 to-primary/0 pointer-events-none absolute inset-0 bg-gradient-to-tr opacity-60' />
-      )}
-    </motion.div>
+    </div>
   )
 }
 

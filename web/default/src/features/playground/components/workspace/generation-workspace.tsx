@@ -61,6 +61,9 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
   const imageCount = usePlaygroundStore(
     (state) => state.studioSettings.imageCount
   )
+  const imageSize = usePlaygroundStore(
+    (state) => state.studioSettings.imageSize
+  )
   const addRecentPrompt = usePlaygroundStore((state) => state.addRecentPrompt)
   const addMyWork = usePlaygroundStore((state) => state.addMyWork)
 
@@ -242,6 +245,9 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                     imageCount={
                       props.modality === 'image' ? imageCount : undefined
                     }
+                    imageSize={
+                      props.modality === 'image' ? imageSize : undefined
+                    }
                     percent={
                       props.modality === 'video' ? videoTask.percent : null
                     }
@@ -276,6 +282,7 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
                         caption={image.revisedPrompt}
                         filename={filename}
                         index={index}
+                        requestedSize={imageSize}
                         downloading={downloading === filename}
                         onDownload={() =>
                           void downloadMedia(image.url, filename, 'image')

@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Download, FileText } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -172,31 +172,13 @@ export function PlaygroundMessageContent({
           {message.managedTool.images && (
             <div className='mt-3 grid gap-2 sm:grid-cols-2'>
               {message.managedTool.images.map((url, index) => (
-                <div key={url} className='relative overflow-hidden rounded-lg'>
-                  <img
-                    src={url}
-                    alt={t('Generated image')}
-                    className='w-full object-contain'
-                    referrerPolicy='no-referrer'
-                    loading='lazy'
-                    decoding='async'
-                  />
-                  <Button
-                    size='icon-sm'
-                    variant='secondary'
-                    className='absolute right-2 bottom-2'
-                    aria-label={t('Download')}
-                    onClick={() =>
-                      void downloadGeneratedMedia(
-                        url,
-                        `image-${index + 1}`,
-                        'image'
-                      )
-                    }
-                  >
-                    <Download aria-hidden='true' />
-                  </Button>
-                </div>
+                <ManagedToolImage
+                  key={url}
+                  url={url}
+                  index={index}
+                  alt={t('Generated image')}
+                  downloadLabel={t('Download')}
+                />
               ))}
             </div>
           )}
@@ -279,6 +261,57 @@ export function PlaygroundMessageContent({
           {actions}
         </>
       )}
+    </div>
+  )
+}
+
+function ManagedToolImage(props: {
+  url: string
+  index: number
+  alt: string
+  downloadLabel: string
+}) {
+  const [sizeLabel, setSizeLabel] = useState<string | null>(null)
+
+  return (
+    <div
+      className='generation-result-enter border-border/70 bg-muted/30 relative overflow-hidden rounded-xl border'
+      style={{ animationDelay: `${props.index * 70}ms` }}
+    >
+      <img
+        src={props.url}
+        alt={props.alt}
+        className='generation-image-reveal w-full object-contain'
+        referrerPolicy='no-referrer'
+        loading='lazy'
+        decoding='async'
+        onLoad={(event) => {
+          const img = event.currentTarget
+          if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+            setSizeLabel(`${img.naturalWidth}×${img.naturalHeight}`)
+          }
+        }}
+      />
+      {sizeLabel && (
+        <span className='generation-size-badge bg-background/85 text-foreground/90 absolute top-2 left-2 rounded-full px-2 py-0.5 font-mono text-[11px] shadow-sm backdrop-blur-sm'>
+          {sizeLabel}
+        </span>
+      )}
+      <Button
+        size='icon-sm'
+        variant='secondary'
+        className='absolute right-2 bottom-2'
+        aria-label={props.downloadLabel}
+        onClick={() =>
+          void downloadGeneratedMedia(
+            props.url,
+            `image-${props.index + 1}`,
+            'image'
+          )
+        }
+      >
+        <Download aria-hidden='true' />
+      </Button>
     </div>
   )
 }
