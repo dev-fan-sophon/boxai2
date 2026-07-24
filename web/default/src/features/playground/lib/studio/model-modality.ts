@@ -9,6 +9,7 @@ License, or (at your option) any later version.
 import type { PricingModel } from '@/features/pricing/types'
 
 import type { StudioModality } from '../../types'
+import { isPlaygroundImageModel } from './image-request-schema'
 
 type ModelModalityMetadata = Pick<PricingModel, 'model_name'> &
   Partial<
@@ -38,7 +39,13 @@ export function getModelModality(model: ModelModalityMetadata): StudioModality {
   ].some((profile) => profiles.has(profile))
   if (hasExplicitPlaygroundProfile) {
     if (profiles.has('openai.video.create')) return 'video'
-    if (profiles.has('openai.images.generate')) return 'image'
+    // Image profile maps to image only for GPT-format playground models.
+    if (
+      profiles.has('openai.images.generate') &&
+      isPlaygroundImageModel(model.model_name)
+    ) {
+      return 'image'
+    }
     if (profiles.has('openai.audio.speech')) return 'audio'
     return 'chat'
   }
@@ -49,11 +56,8 @@ export function getModelModality(model: ModelModalityMetadata): StudioModality {
   ) {
     return 'video'
   }
-  if (
-    output.includes('image') ||
-    endpoints.some((item) => item.includes('image')) ||
-    /\boutput:image\b/.test(tags)
-  ) {
+  // Metadata image tags alone are not enough — only GPT-format image models.
+  if (isPlaygroundImageModel(model.model_name)) {
     return 'image'
   }
   if (
@@ -72,11 +76,7 @@ export function getModelModality(model: ModelModalityMetadata): StudioModality {
   ) {
     return 'video'
   }
-  if (
-    /dall|image|imagen|flux|midjourney|stable-diffusion|seedream|jimeng|nano-banana/.test(
-      name
-    )
-  ) {
+  if (isPlaygroundImageModel(name)) {
     return 'image'
   }
   if (/tts|speech|audio|voice/.test(name)) return 'audio'

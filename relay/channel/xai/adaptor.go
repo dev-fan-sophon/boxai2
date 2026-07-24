@@ -38,10 +38,13 @@ func (a *Adaptor) ConvertAudioRequest(c *gin.Context, info *relaycommon.RelayInf
 }
 
 func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	// Keep the OpenAI Images request shape end-to-end (playground → relay → xAI).
 	xaiRequest := ImageRequest{
 		Model:          request.Model,
 		Prompt:         request.Prompt,
 		N:              int(lo.FromPtrOr(request.N, uint(1))),
+		Size:           request.Size,
+		Quality:        request.Quality,
 		ResponseFormat: request.ResponseFormat,
 	}
 	return xaiRequest, nil

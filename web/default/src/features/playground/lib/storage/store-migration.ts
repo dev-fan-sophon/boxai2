@@ -24,6 +24,7 @@ import type {
   StudioModality,
   StudioSettings,
 } from '../../types'
+import { normalizeImageGenerationSettings } from '../studio/image-request-schema'
 import type {
   ActiveSessionByModality,
   PlaygroundSession,
@@ -194,7 +195,7 @@ export function preparePersistedPlaygroundState(
 export const DEFAULT_STUDIO_SETTINGS: StudioSettings = {
   imageCount: 1,
   imageSize: '1024x1024',
-  imageQuality: 'standard',
+  imageQuality: 'auto',
   videoDuration: 5,
   videoSize: '1280x720',
   voice: 'alloy',
@@ -228,21 +229,16 @@ function stringArray(value: unknown, limit: number): string[] {
 export function normalizeStudioSettings(value: unknown): StudioSettings {
   const raw = isRecord(value) ? value : {}
   const merged = { ...DEFAULT_STUDIO_SETTINGS, ...raw }
+  // Image fields are clamped to the GPT Image 2 schema.
+  const image = normalizeImageGenerationSettings({
+    imageCount: merged.imageCount,
+    imageSize: merged.imageSize,
+    imageQuality: merged.imageQuality,
+  })
   return {
-    imageCount: clampNumber(
-      merged.imageCount,
-      1,
-      10,
-      DEFAULT_STUDIO_SETTINGS.imageCount
-    ),
-    imageSize:
-      typeof merged.imageSize === 'string'
-        ? merged.imageSize
-        : DEFAULT_STUDIO_SETTINGS.imageSize,
-    imageQuality:
-      typeof merged.imageQuality === 'string'
-        ? merged.imageQuality
-        : DEFAULT_STUDIO_SETTINGS.imageQuality,
+    imageCount: image.imageCount,
+    imageSize: image.imageSize,
+    imageQuality: image.imageQuality,
     videoDuration: clampNumber(
       merged.videoDuration,
       1,

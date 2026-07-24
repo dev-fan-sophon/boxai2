@@ -75,6 +75,7 @@ import {
   extractManagedSearchResult,
   updateManagedAssistant,
 } from './lib/managed-tools'
+import { isPlaygroundImageModel } from './lib/studio/image-request-schema'
 import { getModelModality } from './lib/studio/model-modality'
 import type { AgentCard } from './lib/workbench/agents-data'
 import type { InspirationTemplate } from './lib/workbench/inspiration-data'
@@ -274,9 +275,19 @@ export function Playground() {
           return
         }
         if (run.action === 'generate_image') {
+          const toolModel = String(
+            response.arguments.model || run.tool_model || ''
+          )
+          if (!isPlaygroundImageModel(toolModel)) {
+            throw new Error(
+              t(
+                'Playground image generation uses GPT-format models only (gpt-image-2 or grok-imagine-image). Select one and try again.'
+              )
+            )
+          }
           setAssistantTool(baseCard)
           const images = await generateImages({
-            model: String(response.arguments.model),
+            model: toolModel,
             group: config.group,
             prompt: String(response.arguments.prompt),
             settings: {
@@ -487,9 +498,14 @@ export function Playground() {
       const pricingModel = playgroundModels.find(
         (model) => model.model_name === option.value
       )
-      found.add(
-        getModelModality(pricingModel ?? { model_name: option.value })
+      const modality = getModelModality(
+        pricingModel ?? { model_name: option.value }
       )
+      // Image modality only appears for GPT-format image models.
+      if (modality === 'image' && !isPlaygroundImageModel(option.value)) {
+        continue
+      }
+      found.add(modality)
     }
     return [...found]
   }, [models, playgroundModels])
@@ -505,11 +521,16 @@ export function Playground() {
       const currentMatches =
         current != null && getModelModality(current) === modality
       if (!currentMatches) {
-        const match = playgroundModels.find(
-          (model) =>
-            models.some((item) => item.value === model.model_name) &&
-            getModelModality(model) === modality
-        )
+        const match = playgroundModels.find((model) => {
+          if (!models.some((item) => item.value === model.model_name)) {
+            return false
+          }
+          if (getModelModality(model) !== modality) return false
+          if (modality === 'image' && !isPlaygroundImageModel(model.model_name)) {
+            return false
+          }
+          return true
+        })
         if (!match) {
           toast.error(t('No model available for this modality'), {
             description: t(

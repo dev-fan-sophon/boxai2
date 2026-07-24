@@ -21,13 +21,21 @@ import {
   VIDEO_DURATIONS,
   VIDEO_SIZES,
   VOICES,
+  imageQualityLabelKey,
+  imageSizeLabel,
   videoSizeLabel,
 } from '../../lib/studio/generation-options'
+import {
+  isPlaygroundImageModel,
+  normalizeImageGenerationSettings,
+  PLAYGROUND_IMAGE_MODEL,
+} from '../../lib/studio/image-request-schema'
 import type { StudioModality, StudioSettings } from '../../types'
 
 /**
- * Generation parameters for the active non-chat modality (image size and
- * count, video duration, voice, …), backed by the shared store.
+ * Generation parameters for the active non-chat modality.
+ * Image controls use the OpenAI Images schema (quality/size/n) for every
+ * allowed model (gpt-image-2 and grok-imagine-image).
  */
 export function GenerationSettingsSection(props: {
   modality: Exclude<StudioModality, 'chat'>
@@ -37,6 +45,7 @@ export function GenerationSettingsSection(props: {
   const setStudioSettings = usePlaygroundStore(
     (state) => state.setStudioSettings
   )
+  const model = usePlaygroundStore((state) => state.config.model)
 
   const update = <K extends keyof StudioSettings>(
     key: K,
@@ -44,14 +53,29 @@ export function GenerationSettingsSection(props: {
   ) => setStudioSettings((prev) => ({ ...prev, [key]: value }))
 
   if (props.modality === 'image') {
+    const allowed = isPlaygroundImageModel(model)
+    const normalized = normalizeImageGenerationSettings(settings)
+
     return (
       <div className='space-y-3'>
+        {!allowed && (
+          <p className='border-destructive/30 bg-destructive/5 text-destructive rounded-lg border px-2.5 py-2 text-[11px] text-pretty'>
+            {t(
+              'Playground image generation uses GPT-format models only (gpt-image-2 or grok-imagine-image). Select one and try again.'
+            )}
+          </p>
+        )}
+        {allowed && (
+          <p className='border-border bg-muted/40 text-muted-foreground rounded-lg border px-2.5 py-2 text-[11px] text-pretty'>
+            {t('Image model')}: {model || PLAYGROUND_IMAGE_MODEL}
+          </p>
+        )}
         <SettingRow label={t('Count')} htmlFor='gen-image-count'>
           <NativeSelect
             id='gen-image-count'
             size='sm'
             className='w-full'
-            value={String(settings.imageCount)}
+            value={String(normalized.imageCount)}
             onChange={(event) =>
               update('imageCount', Number(event.target.value))
             }
@@ -68,12 +92,12 @@ export function GenerationSettingsSection(props: {
             id='gen-image-size'
             size='sm'
             className='w-full'
-            value={settings.imageSize}
+            value={normalized.imageSize}
             onChange={(event) => update('imageSize', event.target.value)}
           >
             {IMAGE_SIZES.map((size) => (
               <NativeSelectOption key={size} value={size}>
-                {size}
+                {size === 'auto' ? t('Auto') : imageSizeLabel(size)}
               </NativeSelectOption>
             ))}
           </NativeSelect>
@@ -83,12 +107,12 @@ export function GenerationSettingsSection(props: {
             id='gen-image-quality'
             size='sm'
             className='w-full'
-            value={settings.imageQuality}
+            value={normalized.imageQuality}
             onChange={(event) => update('imageQuality', event.target.value)}
           >
             {IMAGE_QUALITIES.map((quality) => (
               <NativeSelectOption key={quality} value={quality}>
-                {t(quality === 'hd' ? 'HD' : 'Standard')}
+                {t(imageQualityLabelKey(quality))}
               </NativeSelectOption>
             ))}
           </NativeSelect>

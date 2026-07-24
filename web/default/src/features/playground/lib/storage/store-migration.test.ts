@@ -73,7 +73,7 @@ function seedLegacyKeys() {
           id: 'r1',
           prompt: 'draw a cat',
           modality: 'image',
-          model: 'gpt-image-1',
+          model: 'gpt-image-2',
           createdAt: 1,
         },
       ],
@@ -132,7 +132,9 @@ describe('loadPersistedPlaygroundState', () => {
       'hello from legacy storage'
     )
     // Studio values clamped on load, invalid pin entries dropped.
-    expect(state.studioSettings.imageCount).toBe(10)
+    // Image count is clamped to the GPT Image 2 max (4), not the old 10.
+    expect(state.studioSettings.imageCount).toBe(4)
+    expect(state.studioSettings.imageQuality).toBe('auto')
     expect(state.studioSettings.voice).toBe('nova')
     expect(state.pinnedModels).toEqual(['gpt-4o'])
     expect(state.chatTools.webSearch).toBe(true)

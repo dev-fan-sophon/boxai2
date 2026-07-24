@@ -25,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 import type { PricingModel } from '../../../pricing/types'
+import { isPlaygroundImageModel } from '../../lib/studio/image-request-schema'
 import { getModelModality } from '../../lib/studio/model-modality'
 import {
   isLikelyNewModel,
@@ -96,6 +97,10 @@ export function ModelCatalog(props: ModelCatalogProps) {
       const searchable =
         `${model.model_name} ${model.description ?? ''} ${model.vendor_name ?? ''}`.toLowerCase()
       const modelModality = getModelModality(model)
+      // Image catalog only lists GPT-format playground image models.
+      if (modelModality === 'image' && !isPlaygroundImageModel(model.model_name)) {
+        return false
+      }
       if (!searchable.includes(normalizedQuery)) return false
       if (vendor !== 'all' && model.vendor_name !== vendor) return false
       if (modality === 'mine') return pinnedSet.has(model.model_name)

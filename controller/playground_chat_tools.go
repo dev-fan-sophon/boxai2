@@ -304,14 +304,59 @@ func stringSliceContains(v []string, w string) bool {
 	return false
 }
 func selectToolModel(models []string, action string) string {
-	priorities := []string{"gpt-image-2", "grok-imagine-image"}
-	need := []string{"image", "dall", "flux", "seedream", "imagen"}
+	// Image tools only pick models that speak the OpenAI Images request shape
+	// used by the playground (gpt-image-2* and grok-imagine-image*). No DALL·E / Flux.
+	if action == service.PlaygroundToolImage {
+		type rankMatch struct {
+			model string
+			rank  int
+		}
+		var matches []rankMatch
+		for _, enabled := range models {
+			bare := enabled
+			if i := strings.LastIndex(enabled, "/"); i >= 0 {
+				bare = enabled[i+1:]
+			}
+			lower := strings.ToLower(strings.TrimSpace(bare))
+			rank := -1
+			switch {
+			case lower == "gpt-image-2":
+				rank = 0
+			case strings.HasPrefix(lower, "gpt-image-2-"):
+				rank = 1
+			case lower == "grok-imagine-image-pro":
+				rank = 2
+			case lower == "grok-imagine-image" || strings.HasPrefix(lower, "grok-imagine-image-"):
+				rank = 3
+			case strings.HasPrefix(lower, "grok-2-image"):
+				rank = 4
+			}
+			if rank >= 0 {
+				matches = append(matches, rankMatch{model: enabled, rank: rank})
+			}
+		}
+		if len(matches) == 0 {
+			return ""
+		}
+		sort.Slice(matches, func(i, j int) bool {
+			if matches[i].rank != matches[j].rank {
+				return matches[i].rank < matches[j].rank
+			}
+			return strings.ToLower(matches[i].model) < strings.ToLower(matches[j].model)
+		})
+		return matches[0].model
+	}
+
+	priorities := []string{}
+	need := []string{}
 	if action == service.PlaygroundToolVideo {
 		priorities = []string{"grok-imagine-video", "grok-imagine-video-1.5"}
 		need = []string{"video", "sora", "veo", "kling", "wan"}
 	} else if action == service.PlaygroundToolSearch {
 		priorities = []string{"grok-4.5", "grok-4.3"}
 		need = []string{"grok-4"}
+	} else {
+		return ""
 	}
 	for _, preferred := range priorities {
 		for _, enabled := range models {

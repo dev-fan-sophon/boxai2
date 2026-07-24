@@ -14,12 +14,15 @@ func TestSelectToolModelUsesEnabledDeterministicPriority(t *testing.T) {
 		action   string
 		expected string
 	}{
-		{"image primary", []string{"grok-imagine-image", "gpt-image-2"}, service.PlaygroundToolImage, "gpt-image-2"},
-		{"image secondary", []string{"flux-pro", "grok-imagine-image"}, service.PlaygroundToolImage, "grok-imagine-image"},
+		{"image prefers gpt-image-2 over grok", []string{"grok-imagine-image", "gpt-image-2"}, service.PlaygroundToolImage, "gpt-image-2"},
+		{"image prefers bare gpt-image-2 over suffix", []string{"gpt-image-2-mini", "gpt-image-2"}, service.PlaygroundToolImage, "gpt-image-2"},
+		{"image accepts vendor-prefixed gpt-image-2", []string{"openai/gpt-image-2"}, service.PlaygroundToolImage, "openai/gpt-image-2"},
+		{"image falls back to grok-imagine-image", []string{"flux-pro", "grok-imagine-image", "dall-e-3"}, service.PlaygroundToolImage, "grok-imagine-image"},
+		{"image prefers grok pro over base", []string{"grok-imagine-image", "grok-imagine-image-pro"}, service.PlaygroundToolImage, "grok-imagine-image-pro"},
+		{"image rejects non GPT-format families", []string{"flux-pro", "dall-e-3", "gpt-image-1", "imagen-3"}, service.PlaygroundToolImage, ""},
 		{"video primary", []string{"grok-imagine-video-1.5", "grok-imagine-video"}, service.PlaygroundToolVideo, "grok-imagine-video"},
 		{"video secondary", []string{"veo-3", "grok-imagine-video-1.5"}, service.PlaygroundToolVideo, "grok-imagine-video-1.5"},
 		{"deterministic fallback", []string{"video-z", "video-a"}, service.PlaygroundToolVideo, "video-a"},
-		{"does not select disabled priority", []string{"flux-pro"}, service.PlaygroundToolImage, "flux-pro"},
 		{"no media model", []string{"gpt-5"}, service.PlaygroundToolImage, ""},
 		{"search primary", []string{"grok-4.3", "grok-4.5"}, service.PlaygroundToolSearch, "grok-4.5"},
 		{"search secondary", []string{"gpt-5", "grok-4.3"}, service.PlaygroundToolSearch, "grok-4.3"},

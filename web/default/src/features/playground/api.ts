@@ -19,6 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { api, getCommonHeaders } from '@/lib/api'
 
 import { API_ENDPOINTS } from './constants'
+import { buildImageGenerationRequestBody } from './lib/studio/image-request-schema'
+import { parseRequestErrorDetails } from './lib/streaming/request-error-utils'
 import type { ApiAgent } from './lib/workbench/agents-data'
 import type {
   ChatCompletionRequest,
@@ -250,51 +252,45 @@ export type ImageGenerateInput = {
 export async function generateImages(
   input: ImageGenerateInput
 ): Promise<GeneratedImage[]> {
-  let quality = input.settings.imageQuality
-  const model = input.model.toLowerCase()
-  if (model.startsWith('gpt-image-') || model.startsWith('chatgpt-image-')) {
-    if (quality === 'standard') quality = 'medium'
-    if (quality === 'hd') quality = 'high'
-  }
-
-  const body: Record<string, unknown> = {
+  const ref = await resolveMediaForUpstream(input.referenceImage)
+  const body = buildImageGenerationRequestBody({
     model: input.model,
     group: input.group,
     prompt: input.prompt,
-    n: input.settings.imageCount,
-    size: input.settings.imageSize,
-    quality,
-  }
-  const ref = await resolveMediaForUpstream(input.referenceImage)
-  if (ref) {
-    body.images = [ref]
-    body.image = ref
-  }
+    settings: input.settings,
+    referenceImage: ref,
+  })
   const endpoint =
     input.editMode && ref
       ? API_ENDPOINTS.IMAGE_EDITS
       : API_ENDPOINTS.IMAGE_GENERATIONS
-  const response = await api.post(endpoint, body, {
-    headers: input.execution
-      ? {
-          'X-Playground-Run-Id': String(input.execution.runId),
-          'X-Playground-Execution-Token': input.execution.executionToken,
-        }
-      : undefined,
-  })
-  const items = (response.data?.data ?? []) as Array<{
-    url?: string
-    b64_json?: string
-    revised_prompt?: string
-  }>
-  return items
-    .map((item) => ({
-      url:
-        item.url ??
-        (item.b64_json ? `data:image/png;base64,${item.b64_json}` : ''),
-      revisedPrompt: item.revised_prompt,
-    }))
-    .filter((item) => item.url)
+  try {
+    const response = await api.post(endpoint, body, {
+      headers: input.execution
+        ? {
+            'X-Playground-Run-Id': String(input.execution.runId),
+            'X-Playground-Execution-Token': input.execution.executionToken,
+          }
+        : undefined,
+      skipErrorHandler: true,
+    } as Record<string, unknown>)
+    const items = (response.data?.data ?? []) as Array<{
+      url?: string
+      b64_json?: string
+      revised_prompt?: string
+    }>
+    return items
+      .map((item) => ({
+        url:
+          item.url ??
+          (item.b64_json ? `data:image/png;base64,${item.b64_json}` : ''),
+        revisedPrompt: item.revised_prompt,
+      }))
+      .filter((item) => item.url)
+  } catch (error) {
+    const details = parseRequestErrorDetails(error)
+    throw new Error(details.errorMessage)
+  }
 }
 
 export type VideoSubmitInput = {

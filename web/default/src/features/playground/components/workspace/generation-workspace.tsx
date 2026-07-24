@@ -21,6 +21,7 @@ import { usePlaygroundStore } from '@/stores/playground-store'
 import type { UseStudioResult } from '../../hooks/use-studio'
 import { useVideoTaskResult } from '../../hooks/use-video-task-result'
 import { downloadGeneratedMedia } from '../../lib/download-generated-media'
+import { isPlaygroundImageModel } from '../../lib/studio/image-request-schema'
 import type { StudioModality } from '../../types'
 import type { MediaReference } from '../composer/attachments/media-reference-slot'
 import { GenerationComposer } from '../composer/generation-composer'
@@ -133,6 +134,14 @@ export function GenerationWorkspace(props: GenerationWorkspaceProps) {
   const submit = (prompt: string) => {
     if (!prompt || !model) return
     if (!props.canSubmit()) return
+    if (props.modality === 'image' && !isPlaygroundImageModel(model)) {
+      toast.error(
+        t(
+          'Playground image generation uses GPT-format models only (gpt-image-2 or grok-imagine-image). Select one and try again.'
+        )
+      )
+      return
+    }
     setLastPrompt(prompt)
     const settings = usePlaygroundStore.getState().studioSettings
     addRecentPrompt({ prompt, modality: props.modality, model })

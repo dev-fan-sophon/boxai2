@@ -7,11 +7,19 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 
-// Option lists for the generation settings panel. These are catalog-level
-// defaults, not model-derived capabilities.
-export const IMAGE_SIZES = ['1024x1024', '1536x1024', '1024x1536'] as const
-export const IMAGE_QUALITIES = ['standard', 'hd'] as const
-export const IMAGE_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const
+// Option lists for the generation settings panel.
+// Image options match the OpenAI Images schema (GPT Image / Grok Imagine).
+
+import {
+  GPT_IMAGE_COUNTS,
+  GPT_IMAGE_QUALITIES,
+  GPT_IMAGE_SIZES,
+} from './image-request-schema'
+
+export const IMAGE_SIZES = GPT_IMAGE_SIZES
+export const IMAGE_QUALITIES = GPT_IMAGE_QUALITIES
+export const IMAGE_COUNTS = GPT_IMAGE_COUNTS
+
 export const VIDEO_SIZES = ['1280x720', '720x1280', '1920x1080'] as const
 export const VIDEO_DURATIONS = [1, 2, 3, 5, 8, 10, 15, 20, 30, 45, 60] as const
 export const VOICES = [
@@ -45,3 +53,8 @@ function resolutionLabel(size: string): string {
 export function videoSizeLabel(size: string): string {
   return `${resolutionLabel(size)} · ${aspectFromSize(size)}`
 }
+
+export {
+  imageQualityLabelKey,
+  imageSizeLabel,
+} from './image-request-schema'
