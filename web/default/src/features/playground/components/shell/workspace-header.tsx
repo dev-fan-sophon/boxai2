@@ -37,9 +37,9 @@ type WorkspaceHeaderProps = {
   mode: 'model' | 'duo'
   modality: StudioModality
   sessionTitle?: string
-  /** Opens the catalog drawer on mobile / focuses models rail on desktop */
+  /** Opens the catalog drawer on mobile (desktop catalog lives in the left rail) */
   onOpenCatalog: () => void
-  /** Opens session history (mobile sheet / desktop rail tab) */
+  /** Opens session history as a right-side sheet */
   onOpenHistory?: () => void
   /** Start a new session in the current modality */
   onNewSession?: () => void
@@ -135,18 +135,9 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
   return (
     <div className='playground-workspace-header border-border/70 flex h-11 shrink-0 items-center justify-between gap-2 border-b px-2 sm:h-12 sm:px-3'>
       {isDesktop ? (
-        <button
-          type='button'
-          onClick={props.onOpenCatalog}
-          className='focus-visible:ring-ring hover:bg-muted/50 flex min-w-0 items-center gap-1.5 rounded-xl py-1 pr-1.5 pl-0.5 text-left outline-none transition-colors focus-visible:ring-2'
-          aria-label={t('Open catalog')}
-        >
+        <div className='flex min-w-0 items-center gap-1.5 py-1 pr-1.5 pl-0.5'>
           {modelInfo}
-          <ChevronDown
-            className='text-muted-foreground size-3.5 shrink-0'
-            aria-hidden='true'
-          />
-        </button>
+        </div>
       ) : (
         <button
           type='button'
@@ -166,7 +157,7 @@ export function WorkspaceHeader(props: WorkspaceHeaderProps) {
           <Button
             size='icon'
             variant='ghost'
-            className='text-muted-foreground hover:text-foreground size-9 touch-manipulation lg:hidden sm:size-8'
+            className='text-muted-foreground hover:text-foreground size-9 touch-manipulation sm:size-8'
             aria-label={t('History')}
             onClick={props.onOpenHistory}
           >

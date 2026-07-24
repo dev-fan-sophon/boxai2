@@ -91,7 +91,6 @@ export function Playground() {
   const [signInDialogOpen, setSignInDialogOpen] = useState(false)
   const [catalogDrawerOpen, setCatalogDrawerOpen] = useState(false)
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false)
-  const [railTab, setRailTab] = useState<'history' | 'models'>('history')
   // Settings panel: persisted open state on wide desktop, ephemeral overlay
   // between 1024–1279px, bottom sheet below 1024px.
   const isDesktop = useMediaQuery('(min-width: 1024px)')
@@ -620,7 +619,6 @@ export function Playground() {
           switchModality: modality,
         })
         setCatalogDrawerOpen(false)
-        if (isDesktop) setRailTab('history')
       }}
       pinnedModels={pinnedModels}
       onTogglePin={togglePinnedModel}
@@ -672,8 +670,6 @@ export function Playground() {
       onCatalogOpenChange={setCatalogDrawerOpen}
       historyOpen={historyDrawerOpen}
       onHistoryOpenChange={setHistoryDrawerOpen}
-      railTab={railTab}
-      onRailTabChange={setRailTab}
       settings={
         showWorkspace ? (
           <SettingsPanel
@@ -706,19 +702,10 @@ export function Playground() {
           modality={activeModality}
           sessionTitle={activeSession?.title}
           onOpenCatalog={() => {
-            if (isDesktop) {
-              setRailTab('models')
-              return
-            }
-            setCatalogDrawerOpen(true)
+            // Desktop keeps the catalog in the left rail; mobile uses a sheet.
+            if (!isDesktop) setCatalogDrawerOpen(true)
           }}
-          onOpenHistory={() => {
-            if (isDesktop) {
-              setRailTab('history')
-              return
-            }
-            setHistoryDrawerOpen(true)
-          }}
+          onOpenHistory={() => setHistoryDrawerOpen(true)}
           onNewSession={handleNewSession}
           actions={
             <Button

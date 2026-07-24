@@ -24,22 +24,20 @@ import { SessionHistoryPanel } from './session-history-panel'
 type PlaygroundShellProps = {
   toolbar: React.ReactNode
   catalog: React.ReactNode
-  /** Right settings column (desktop only); rendered by later phases */
+  /** Right settings column (desktop only) */
   settings?: React.ReactNode
   catalogOpen: boolean
   onCatalogOpenChange: (open: boolean) => void
   historyOpen: boolean
   onHistoryOpenChange: (open: boolean) => void
-  /** Desktop left-rail tab: history (default) or models */
-  railTab: 'history' | 'models'
-  onRailTabChange: (tab: 'history' | 'models') => void
   children: React.ReactNode
   className?: string
 }
 
 /**
- * Playground layout: toolbar, left rail (History | Models on desktop;
- * sheets on mobile), workspace center, optional settings column.
+ * Playground layout: toolbar, left model catalog (desktop), workspace center,
+ * optional settings column. History opens from the workspace header icon as a
+ * side sheet on every breakpoint — no History | Models tab bar.
  */
 export function PlaygroundShell(props: PlaygroundShellProps) {
   const { t } = useTranslation()
@@ -47,18 +45,12 @@ export function PlaygroundShell(props: PlaygroundShellProps) {
   const { catalogOpen, onCatalogOpenChange, historyOpen, onHistoryOpenChange } =
     props
 
+  // Desktop keeps the model catalog in the left rail; close the mobile catalog
+  // sheet when crossing the breakpoint. History is always a sheet.
   useEffect(() => {
     if (isDesktop && catalogOpen) onCatalogOpenChange(false)
-    if (isDesktop && historyOpen) onHistoryOpenChange(false)
-  }, [
-    isDesktop,
-    catalogOpen,
-    onCatalogOpenChange,
-    historyOpen,
-    onHistoryOpenChange,
-  ])
+  }, [isDesktop, catalogOpen, onCatalogOpenChange])
 
-  // Mutually exclusive mobile sheets.
   const handleCatalogOpen = (open: boolean) => {
     if (open) onHistoryOpenChange(false)
     onCatalogOpenChange(open)
@@ -84,44 +76,7 @@ export function PlaygroundShell(props: PlaygroundShellProps) {
       <div className='relative flex min-h-0 flex-1'>
         {isDesktop && (
           <aside className='playground-rail bg-sidebar/95 text-sidebar-foreground border-sidebar-border flex w-[min(300px,28vw)] shrink-0 flex-col border-r backdrop-blur-md'>
-            <div
-              className='border-sidebar-border flex shrink-0 gap-0.5 border-b p-1.5'
-              role='tablist'
-              aria-label={t('Sidebar')}
-            >
-              {(
-                [
-                  ['history', t('History')],
-                  ['models', t('Models')],
-                ] as const
-              ).map(([id, label]) => {
-                const active = props.railTab === id
-                return (
-                  <button
-                    key={id}
-                    type='button'
-                    role='tab'
-                    aria-selected={active}
-                    onClick={() => props.onRailTabChange(id)}
-                    className={cn(
-                      'focus-visible:ring-ring flex-1 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors outline-none focus-visible:ring-2',
-                      active
-                        ? 'bg-primary/15 text-primary'
-                        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-                    )}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-            <div className='min-h-0 flex-1'>
-              {props.railTab === 'history' ? (
-                <SessionHistoryPanel embedded />
-              ) : (
-                props.catalog
-              )}
-            </div>
+            <div className='min-h-0 flex-1'>{props.catalog}</div>
           </aside>
         )}
 
@@ -132,10 +87,7 @@ export function PlaygroundShell(props: PlaygroundShellProps) {
         {isDesktop && props.settings}
       </div>
 
-      <Sheet
-        open={!isDesktop && catalogOpen}
-        onOpenChange={handleCatalogOpen}
-      >
+      <Sheet open={!isDesktop && catalogOpen} onOpenChange={handleCatalogOpen}>
         <SheetContent
           side='left'
           className='bg-sidebar text-sidebar-foreground border-sidebar-border w-[min(92vw,22rem)] p-0 sm:max-w-sm'
@@ -152,9 +104,9 @@ export function PlaygroundShell(props: PlaygroundShellProps) {
         </SheetContent>
       </Sheet>
 
-      <Sheet open={!isDesktop && historyOpen} onOpenChange={handleHistoryOpen}>
+      <Sheet open={historyOpen} onOpenChange={handleHistoryOpen}>
         <SheetContent
-          side='left'
+          side='right'
           className='bg-sidebar text-sidebar-foreground border-sidebar-border w-[min(92vw,22rem)] p-0 sm:max-w-sm'
         >
           <SheetHeader className='sr-only'>

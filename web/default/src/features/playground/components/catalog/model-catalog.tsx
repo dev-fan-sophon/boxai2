@@ -10,17 +10,16 @@ import {
   AudioLines,
   Image,
   Layers,
+  LayoutGrid,
   MessageSquare,
   Pin,
-  Search,
   Video,
+  type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
@@ -35,13 +34,18 @@ import {
 import type { ModelOption, StudioModality } from '../../types'
 import { ModelBrandIcon } from './model-brand-icon'
 
-const modalities: Array<'all' | StudioModality | 'mine'> = [
-  'all',
-  'chat',
-  'image',
-  'video',
-  'audio',
-  'mine',
+type CatalogFilter = 'all' | StudioModality
+
+const FILTERS: Array<{
+  id: CatalogFilter
+  labelKey: string
+  Icon: LucideIcon
+}> = [
+  { id: 'all', labelKey: 'All', Icon: LayoutGrid },
+  { id: 'chat', labelKey: 'Chat', Icon: MessageSquare },
+  { id: 'image', labelKey: 'Image', Icon: Image },
+  { id: 'video', labelKey: 'Video', Icon: Video },
+  { id: 'audio', labelKey: 'Audio', Icon: AudioLines },
 ]
 
 const modalityIcons = {
@@ -67,11 +71,7 @@ type ModelCatalogProps = {
 
 export function ModelCatalog(props: ModelCatalogProps) {
   const { t } = useTranslation()
-  const [query, setQuery] = useState('')
-  const [modality, setModality] = useState<'all' | StudioModality | 'mine'>(
-    'all'
-  )
-  const [vendor, setVendor] = useState('all')
+  const [modality, setModality] = useState<CatalogFilter>('all')
   const pinnedSet = useMemo(
     () => new Set(props.pinnedModels ?? []),
     [props.pinnedModels]
@@ -84,97 +84,101 @@ export function ModelCatalog(props: ModelCatalogProps) {
     () => props.models.filter((model) => availableNames.has(model.model_name)),
     [availableNames, props.models]
   )
-  const vendors = useMemo(
-    () =>
-      [
-        ...new Set(catalog.map((model) => model.vendor_name).filter(Boolean)),
-      ] as string[],
-    [catalog]
-  )
-  const filtered = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    const list = catalog.filter((model) => {
-      const searchable =
-        `${model.model_name} ${model.description ?? ''} ${model.vendor_name ?? ''}`.toLowerCase()
+
+  const counts = useMemo(() => {
+    const next: Record<CatalogFilter, number> = {
+      all: 0,
+      chat: 0,
+      image: 0,
+      video: 0,
+      audio: 0,
+    }
+    for (const model of catalog) {
       const modelModality = getModelModality(model)
-      // Image catalog only lists GPT-format playground image models.
-      if (modelModality === 'image' && !isPlaygroundImageModel(model.model_name)) {
+      if (
+        modelModality === 'image' &&
+        !isPlaygroundImageModel(model.model_name)
+      ) {
+        continue
+      }
+      next.all += 1
+      next[modelModality] += 1
+    }
+    return next
+  }, [catalog])
+
+  const filtered = useMemo(() => {
+    const list = catalog.filter((model) => {
+      const modelModality = getModelModality(model)
+      if (
+        modelModality === 'image' &&
+        !isPlaygroundImageModel(model.model_name)
+      ) {
         return false
       }
-      if (!searchable.includes(normalizedQuery)) return false
-      if (vendor !== 'all' && model.vendor_name !== vendor) return false
-      if (modality === 'mine') return pinnedSet.has(model.model_name)
       if (modality !== 'all' && modelModality !== modality) return false
       return true
     })
-    // Pinned models float to top within current filter
     return list.sort((a, b) => {
       const ap = pinnedSet.has(a.model_name) ? 0 : 1
       const bp = pinnedSet.has(b.model_name) ? 0 : 1
       if (ap !== bp) return ap - bp
       return a.model_name.localeCompare(b.model_name)
     })
-  }, [catalog, modality, pinnedSet, query, vendor])
+  }, [catalog, modality, pinnedSet])
 
   return (
     <div className='flex h-full min-h-0 flex-col bg-transparent'>
-      <div className='border-border space-y-2.5 border-b p-3'>
-        <div className='relative'>
-          <Search
-            aria-hidden='true'
-            className='text-muted-foreground absolute top-2 left-2.5 size-3.5'
-          />
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={t('Search models')}
-            aria-label={t('Search models')}
-            className='border-border bg-muted/40 text-foreground placeholder:text-muted-foreground focus-visible:border-primary/40 focus-visible:ring-ring/30 h-8 pl-8'
-          />
-        </div>
+      <div className='border-border/70 shrink-0 border-b px-2.5 py-2.5 sm:px-3'>
         <div
-          className='no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5'
-          role='group'
+          className='bg-muted/45 ring-border/60 grid grid-cols-5 gap-0.5 rounded-xl p-0.5 ring-1'
+          role='tablist'
           aria-label={t('Filter by modality')}
         >
-          {modalities.map((item) => {
-            let label = item[0].toUpperCase() + item.slice(1)
-            if (item === 'all') label = 'All'
-            if (item === 'mine') label = 'Mine'
+          {FILTERS.map((item) => {
+            const Icon = item.Icon
+            const active = modality === item.id
+            const count = counts[item.id]
+            const disabled = item.id !== 'all' && count === 0
             return (
               <button
-                key={item}
+                key={item.id}
                 type='button'
+                role='tab'
+                aria-selected={active}
+                aria-disabled={disabled || undefined}
+                disabled={disabled}
+                onClick={() => setModality(item.id)}
                 className={cn(
-                  'h-8 shrink-0 touch-manipulation rounded-lg px-2.5 text-[11px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring sm:h-7 sm:px-2',
-                  modality === item
-                    ? 'bg-primary/15 text-primary ring-1 ring-primary/30'
-                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                  'focus-visible:ring-ring flex min-h-9 flex-col items-center justify-center gap-0.5 rounded-[0.65rem] px-0.5 py-1.5 text-center outline-none transition-[color,background-color,box-shadow,transform] focus-visible:ring-2 active:scale-[0.98] sm:min-h-10',
+                  active
+                    ? 'bg-background text-foreground shadow-xs ring-border/70 ring-1'
+                    : 'text-muted-foreground hover:text-foreground',
+                  disabled && 'pointer-events-none opacity-35'
                 )}
-                onClick={() => setModality(item)}
-                aria-pressed={modality === item}
               >
-                {t(label)}
+                <Icon
+                  className={cn(
+                    'size-3.5 shrink-0',
+                    active ? 'text-primary' : 'opacity-80'
+                  )}
+                  aria-hidden='true'
+                />
+                <span className='text-[10px] leading-none font-semibold tracking-wide'>
+                  {t(item.labelKey)}
+                </span>
+                <span
+                  className={cn(
+                    'font-mono text-[9px] leading-none tabular-nums',
+                    active ? 'text-primary/80' : 'text-muted-foreground/80'
+                  )}
+                >
+                  {count}
+                </span>
               </button>
             )
           })}
         </div>
-        <NativeSelect
-          className='border-border bg-muted/40 text-foreground w-full'
-          size='sm'
-          value={vendor}
-          onChange={(event) => setVendor(event.target.value)}
-          aria-label={t('Filter by vendor')}
-        >
-          <NativeSelectOption value='all'>
-            {t('All vendors')}
-          </NativeSelectOption>
-          {vendors.map((name) => (
-            <NativeSelectOption key={name} value={name}>
-              {name}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
       </div>
 
       <div className='min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2'>
@@ -219,12 +223,8 @@ export function ModelCatalog(props: ModelCatalogProps) {
         {!props.loading && !props.error && filtered.length === 0 && (
           <CatalogState
             text={t('No models match these filters.')}
-            action={t('Clear filters')}
-            onAction={() => {
-              setQuery('')
-              setModality('all')
-              setVendor('all')
-            }}
+            action={t('Show all')}
+            onAction={() => setModality('all')}
           />
         )}
         <div className='space-y-1.5'>
