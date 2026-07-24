@@ -103,7 +103,9 @@ export function Playground() {
   const workspaceMode = usePlaygroundStore((state) => state.workspaceMode)
   const setWorkspaceMode = usePlaygroundStore((state) => state.setWorkspaceMode)
   const activeModality = usePlaygroundStore((state) => state.activeModality)
-  const setActiveModality = usePlaygroundStore((state) => state.setActiveModality)
+  const setActiveModality = usePlaygroundStore(
+    (state) => state.setActiveModality
+  )
   const selectStoreModel = usePlaygroundStore((state) => state.selectModel)
   const selectDuo = usePlaygroundStore((state) => state.selectDuo)
   const startNewSession = usePlaygroundStore((state) => state.startNewSession)
@@ -525,7 +527,10 @@ export function Playground() {
             return false
           }
           if (getModelModality(model) !== modality) return false
-          if (modality === 'image' && !isPlaygroundImageModel(model.model_name)) {
+          if (
+            modality === 'image' &&
+            !isPlaygroundImageModel(model.model_name)
+          ) {
             return false
           }
           return true
@@ -656,6 +661,7 @@ export function Playground() {
 
   return (
     <PlaygroundShell
+      variant={showWorkspace ? 'workspace' : 'discover'}
       toolbar={
         <PlaygroundToolbar
           view={view}

@@ -24,7 +24,10 @@ import { getMarkdown, parseMarkdownToStructure } from 'stream-markdown-parser'
 import { cn } from '@/lib/utils'
 
 import { getMarkdownContent, parseResponseContent } from './response-content'
-import { renderChildren, renderFootnotes } from './response-renderer'
+import {
+  renderResponseFootnotes,
+  renderResponseNodes,
+} from './response-renderer'
 import type { ResponseProps } from './response-types'
 
 const markdown = getMarkdown('new-api-response')
@@ -43,12 +46,13 @@ export const Response = memo((props: ResponseProps) => {
       validateLink: markdown.options.validateLink,
     })
   }, [content, props.final, shouldParseMarkdown])
+  const isFinal = props.final ?? true
   const parsedContent = useMemo(() => parseResponseContent(nodes), [nodes])
   const renderedContent =
     parsedContent.bodyNodes.length > 0
-      ? renderChildren(parsedContent.bodyNodes)
+      ? renderResponseNodes(parsedContent.bodyNodes, isFinal)
       : content
-  const footnotes = renderFootnotes(parsedContent.footnotes)
+  const footnotes = renderResponseFootnotes(parsedContent.footnotes, isFinal)
 
   return (
     <div

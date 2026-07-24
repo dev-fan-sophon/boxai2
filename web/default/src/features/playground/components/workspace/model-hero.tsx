@@ -6,12 +6,18 @@ it under the terms of the GNU Affero General Public License as
 published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
-import { ImageIcon, Music2, Sparkles, Video, type LucideIcon } from 'lucide-react'
+import {
+  ImageIcon,
+  Music2,
+  Sparkles,
+  Video,
+  type LucideIcon,
+} from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 
 import type { PricingModel } from '@/features/pricing/types'
-import { MOTION_TRANSITION } from '@/lib/motion'
+import { MOTION_TRANSITION, MOTION_VARIANTS } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 
 import type { StudioModality } from '../../types'
@@ -43,7 +49,7 @@ const MEDIA_HERO: Record<
       'Tip: add a reference image to guide the look',
     ],
     Icon: ImageIcon,
-    accent: 'from-violet-500/25 via-fuchsia-500/15 to-transparent',
+    accent: 'from-chart-3/25 via-chart-4/15 to-transparent',
   },
   video: {
     titleKey: 'Video generation',
@@ -53,7 +59,7 @@ const MEDIA_HERO: Record<
       'Tip: use a first frame to lock the composition',
     ],
     Icon: Video,
-    accent: 'from-amber-500/25 via-orange-500/15 to-transparent',
+    accent: 'from-warning/25 via-chart-1/15 to-transparent',
   },
   audio: {
     titleKey: 'Audio generation',
@@ -63,7 +69,7 @@ const MEDIA_HERO: Record<
       'Tip: adjust voice and speed in settings',
     ],
     Icon: Music2,
-    accent: 'from-emerald-500/25 via-teal-500/15 to-transparent',
+    accent: 'from-success/25 via-chart-5/15 to-transparent',
   },
 }
 
@@ -137,7 +143,7 @@ export function ModelHero(props: ModelHeroProps) {
       )}
 
       {media && tip && !props.compact && (
-        <div className='border-border/70 bg-muted/40 text-muted-foreground flex max-w-md items-start gap-2 rounded-2xl border px-3.5 py-2.5 text-left text-xs leading-relaxed shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
+        <div className='border-border/70 bg-muted/40 text-muted-foreground ring-foreground/5 flex max-w-md items-start gap-2 rounded-2xl border px-3.5 py-2.5 text-left text-xs leading-relaxed ring-1 ring-inset'>
           <Sparkles
             className='text-primary mt-0.5 size-3.5 shrink-0'
             aria-hidden='true'
@@ -147,7 +153,7 @@ export function ModelHero(props: ModelHeroProps) {
       )}
 
       {!media && (
-        <div className='border-border bg-muted/60 max-h-40 overflow-y-auto rounded-2xl border px-4 py-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]'>
+        <div className='border-border bg-muted/60 ring-foreground/5 max-h-40 overflow-y-auto rounded-2xl border px-4 py-3 text-left ring-1 ring-inset'>
           <p className='text-muted-foreground text-sm leading-relaxed text-pretty'>
             {description}
           </p>
@@ -160,8 +166,8 @@ export function ModelHero(props: ModelHeroProps) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={MOTION_VARIANTS.slideUp.initial}
+      animate={MOTION_VARIANTS.slideUp.animate}
       transition={MOTION_TRANSITION.default}
     >
       {content}

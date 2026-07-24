@@ -85,6 +85,12 @@ const reasoningSchema = z.object({
   durationMs: z.number().optional(),
 })
 
+const usageSchema = z.object({
+  promptTokens: z.number(),
+  completionTokens: z.number(),
+  totalTokens: z.number(),
+})
+
 const messageSchema = z.object({
   key: z.string(),
   from: messageRoleSchema,
@@ -104,6 +110,7 @@ const messageSchema = z.object({
   isContentComplete: z.boolean().optional(),
   status: messageStatusSchema.optional(),
   errorCode: z.string().nullable().optional(),
+  usage: usageSchema.optional(),
 })
 
 export const messagesSchema = z.array(messageSchema)

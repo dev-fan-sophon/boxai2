@@ -16,12 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { ReactNode } from 'react'
+/* eslint-disable react-refresh/only-export-components */
+import { useMemo, type ReactNode } from 'react'
 import type { TableCellNode, TableNode } from 'stream-markdown-parser'
 
 import { cn } from '@/lib/utils'
 
+import { extractTableData } from './chart-spec'
 import { getNodeKey } from './response-content'
+import { TableTools } from './response-table-tools'
 import type { BlockRendererOptions } from './response-types'
 
 function getTableCellAlignClass(
@@ -66,34 +69,44 @@ function renderTableCell(
   )
 }
 
+function ResponseTable(props: {
+  node: TableNode
+  options: BlockRendererOptions
+}) {
+  const { node, options } = props
+  const tableData = useMemo(() => extractTableData(node), [node])
+
+  return (
+    <div className='group/table relative my-4'>
+      {options.final && <TableTools data={tableData} />}
+      <div className='border-border/70 w-full overflow-x-auto rounded-lg border'>
+        <table className='my-0 w-full min-w-max border-separate border-spacing-0 text-sm'>
+          <thead className='bg-muted/60'>
+            <tr className='border-border/70'>
+              {node.header.cells.map((cell, index) =>
+                renderTableCell(cell, getNodeKey(cell, index), options)
+              )}
+            </tr>
+          </thead>
+          <tbody className='divide-border/70 divide-y'>
+            {node.rows.map((row, rowIndex) => (
+              <tr className='border-border/70' key={getNodeKey(row, rowIndex)}>
+                {row.cells.map((cell, cellIndex) =>
+                  renderTableCell(cell, getNodeKey(cell, cellIndex), options)
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export function renderTable(
   node: TableNode,
   key: string,
   options: BlockRendererOptions
 ): ReactNode {
-  return (
-    <div
-      className='border-border/70 my-4 w-full overflow-x-auto rounded-lg border'
-      key={key}
-    >
-      <table className='my-0 w-full min-w-max border-separate border-spacing-0 text-sm'>
-        <thead className='bg-muted/60'>
-          <tr className='border-border/70'>
-            {node.header.cells.map((cell, index) =>
-              renderTableCell(cell, getNodeKey(cell, index), options)
-            )}
-          </tr>
-        </thead>
-        <tbody className='divide-border/70 divide-y'>
-          {node.rows.map((row, rowIndex) => (
-            <tr className='border-border/70' key={getNodeKey(row, rowIndex)}>
-              {row.cells.map((cell, cellIndex) =>
-                renderTableCell(cell, getNodeKey(cell, cellIndex), options)
-              )}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
+  return <ResponseTable key={key} node={node} options={options} />
 }

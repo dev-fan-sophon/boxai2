@@ -17,12 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import DOMPurify from 'dompurify'
-import * as katex from 'katex'
-
-import 'katex/dist/katex.min.css'
 import { Marked, Renderer, type MarkedExtension, type Tokens } from 'marked'
 import { useMemo } from 'react'
 
+import { renderMathToHtml } from '@/lib/katex-render'
 import { cn } from '@/lib/utils'
 
 interface MarkdownProps {
@@ -171,21 +169,8 @@ function escapeHtml(value: string): string {
     .replaceAll("'", '&#39;')
 }
 
-function normalizeMathSource(source: string): string {
-  return source
-    .trim()
-    .replace(/^\\\(/, '')
-    .replace(/\\\)$/, '')
-    .replace(/^\\\[/, '')
-    .replace(/\\\]$/, '')
-}
-
 function renderMath(source: string, displayMode: boolean): string {
-  return katex.renderToString(normalizeMathSource(source), {
-    displayMode,
-    output: 'htmlAndMathml',
-    throwOnError: false,
-  })
+  return renderMathToHtml(source, displayMode)
 }
 
 function replaceEmojiShortcodes(value: string): string {

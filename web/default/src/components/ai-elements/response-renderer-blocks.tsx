@@ -31,8 +31,12 @@ import {
   CodeBlock,
   CodeBlockCopyButton,
 } from '@/components/ai-elements/code-block'
+import { renderMathToHtml } from '@/lib/katex-render'
 import { cn } from '@/lib/utils'
 
+import { HtmlPreviewFence } from './html-preview-fence'
+import { MermaidFence } from './mermaid-diagram'
+import { ChartFence } from './response-chart'
 import { getNodeKey } from './response-content'
 import type { BlockRendererOptions } from './response-types'
 
@@ -140,9 +144,36 @@ export function renderList(
   )
 }
 
-export function renderCodeBlock(node: CodeBlockNode, key: string): ReactNode {
-  const language = node.language || 'plaintext'
+export function renderCodeBlock(
+  node: CodeBlockNode,
+  key: string,
+  options: BlockRendererOptions
+): ReactNode {
+  const language = (node.language || 'plaintext').toLowerCase()
   const lineCount = node.code.split('\n').length
+
+  if (language === 'mermaid') {
+    return <MermaidFence code={node.code} final={options.final} key={key} />
+  }
+
+  if (language === 'chart') {
+    return <ChartFence code={node.code} final={options.final} key={key} />
+  }
+
+  const isPreviewableMarkup =
+    language === 'html' ||
+    language === 'svg' ||
+    (language === 'xml' && node.code.trimStart().startsWith('<svg'))
+  if (isPreviewableMarkup) {
+    return (
+      <HtmlPreviewFence
+        code={node.code}
+        final={options.final}
+        key={key}
+        language={language}
+      />
+    )
+  }
 
   return (
     <CodeBlock
@@ -190,24 +221,51 @@ function renderDefinitionItem(
   )
 }
 
+function renderMathSafely(source: string, displayMode: boolean): string | null {
+  try {
+    return renderMathToHtml(source, displayMode)
+  } catch {
+    return null
+  }
+}
+
 export function renderMathBlock(node: MathBlockNode, key: string): ReactNode {
+  const html = renderMathSafely(node.content, true)
+
+  if (html === null) {
+    return (
+      <pre
+        className='border-border bg-muted/40 my-4 overflow-x-auto rounded-lg border p-4 font-mono text-sm'
+        key={key}
+      >
+        {node.content}
+      </pre>
+    )
+  }
+
   return (
-    <pre
-      className='border-border bg-muted/40 my-4 overflow-x-auto rounded-lg border p-4 font-mono text-sm'
+    <div
+      className='my-4 overflow-x-auto overflow-y-hidden [&_.katex-display]:my-0'
+      // KaTeX output is generated locally from math source, not raw model HTML.
+      dangerouslySetInnerHTML={{ __html: html }}
       key={key}
-    >
-      {node.content}
-    </pre>
+    />
   )
 }
 
 export function renderMathInline(node: MathInlineNode, key: string): ReactNode {
-  return (
-    <code
-      className='bg-muted/70 text-foreground rounded px-1 py-0.5 font-mono text-[0.9em]'
-      key={key}
-    >
-      {node.content}
-    </code>
-  )
+  const html = renderMathSafely(node.content, false)
+
+  if (html === null) {
+    return (
+      <code
+        className='bg-muted/70 text-foreground rounded px-1 py-0.5 font-mono text-[0.9em]'
+        key={key}
+      >
+        {node.content}
+      </code>
+    )
+  }
+
+  return <span dangerouslySetInnerHTML={{ __html: html }} key={key} />
 }

@@ -333,7 +333,8 @@ For commercial licensing, please contact support@quantumnous.com
 }
 
 .generation-size-badge {
-  animation: generation-size-badge 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+  animation: generation-size-badge 0.35s cubic-bezier(0.22, 1, 0.36, 1) 0.12s
+    both;
 }
 
 /* Playground shell: mobile-first polish + ambient stage */
@@ -426,6 +427,45 @@ For commercial licensing, please contact support@quantumnous.com
 
 .playground-modality-switch::-webkit-scrollbar {
   display: none;
+}
+
+/* Discover pages (Agents / Inspiration): colorful ambient header wash */
+.playground-discover-hero {
+  background:
+    radial-gradient(
+      90% 45% at 20% -8%,
+      color-mix(in oklab, var(--primary) 12%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      70% 40% at 85% -6%,
+      color-mix(in oklab, var(--chart-4) 10%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      60% 35% at 55% -4%,
+      color-mix(in oklab, var(--chart-3) 8%, transparent),
+      transparent 50%
+    );
+}
+
+.dark .playground-discover-hero {
+  background:
+    radial-gradient(
+      90% 45% at 20% -8%,
+      color-mix(in oklab, var(--primary) 18%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(
+      70% 40% at 85% -6%,
+      color-mix(in oklab, var(--chart-4) 14%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      60% 35% at 55% -4%,
+      color-mix(in oklab, var(--chart-3) 12%, transparent),
+      transparent 50%
+    );
 }
 
 /* Dark-mode contrast polish for playground reading surfaces */

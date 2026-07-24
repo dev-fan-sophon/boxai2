@@ -7,9 +7,11 @@ published by the Free Software Foundation, either version 3 of the
 License, or (at your option) any later version.
 */
 import { Bot, Lightbulb, Loader2, Sparkles, Square } from 'lucide-react'
+import { motion, useReducedMotion } from 'motion/react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
+import { MOTION_TRANSITION } from '@/lib/motion'
 import { cn } from '@/lib/utils'
 import type { PlaygroundView } from '@/stores/playground-store'
 
@@ -32,17 +34,18 @@ const VIEWS: Array<{
 ]
 
 /**
- * Playground-level toolbar: view switcher on the left, generation status
- * indicator (replacing the old busy strip) on the right.
+ * Playground-level toolbar: underline page-level view tabs on the left,
+ * generation status indicator on the right.
  */
 export function PlaygroundToolbar(props: PlaygroundToolbarProps) {
   const { t } = useTranslation()
+  const shouldReduce = useReducedMotion()
   const generating = props.isChatGenerating || props.isStudioPending
 
   return (
-    <div className='flex min-w-0 flex-1 items-center justify-between gap-2 sm:gap-3'>
+    <div className='flex min-w-0 flex-1 items-center justify-between gap-2 self-stretch sm:gap-3'>
       <div
-        className='bg-muted/45 ring-border/70 flex gap-0.5 rounded-xl p-0.5 ring-1 sm:gap-1 sm:p-1'
+        className='flex h-full items-stretch gap-0.5 sm:gap-2'
         role='tablist'
         aria-label={t('Playground views')}
       >
@@ -58,14 +61,27 @@ export function PlaygroundToolbar(props: PlaygroundToolbarProps) {
               aria-label={t(view.labelKey)}
               onClick={() => props.onViewChange(view.id)}
               className={cn(
-                'focus-visible:ring-ring flex min-h-8 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-[color,background-color,box-shadow,transform] outline-none focus-visible:ring-2 active:scale-[0.98] sm:min-h-0 sm:px-2.5 sm:py-1',
+                'focus-visible:ring-ring relative flex items-center gap-1.5 rounded-t-md px-2 text-sm font-medium transition-colors outline-none focus-visible:ring-2 sm:px-2.5',
                 active
-                  ? 'bg-primary/15 text-primary shadow-xs ring-primary/25 ring-1'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  ? 'text-foreground bg-gradient-to-t from-primary/10 to-transparent'
+                  : 'text-muted-foreground hover:text-foreground'
               )}
             >
-              <Icon className='size-3.5 shrink-0' aria-hidden='true' />
-              <span className='hidden sm:inline'>{t(view.labelKey)}</span>
+              <Icon
+                className={cn('size-4 shrink-0', active && 'text-primary')}
+                aria-hidden='true'
+              />
+              <span>{t(view.labelKey)}</span>
+              {active &&
+                (shouldReduce ? (
+                  <span className='bg-primary absolute inset-x-1 bottom-0 h-0.5 rounded-full' />
+                ) : (
+                  <motion.span
+                    layoutId='playground-view-underline'
+                    className='bg-primary absolute inset-x-1 bottom-0 h-0.5 rounded-full'
+                    transition={MOTION_TRANSITION.fast}
+                  />
+                ))}
             </button>
           )
         })}

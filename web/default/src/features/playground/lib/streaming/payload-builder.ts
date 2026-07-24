@@ -85,6 +85,10 @@ export function buildChatCompletionPayload(
     stream: config.stream,
   }
 
+  if (config.stream) {
+    payload.stream_options = { include_usage: true }
+  }
+
   if (parameterEnabled.temperature) {
     payload.temperature = config.temperature
   }

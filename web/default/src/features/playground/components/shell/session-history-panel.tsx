@@ -96,8 +96,7 @@ export function SessionHistoryPanel(props: SessionHistoryPanelProps) {
 
   const meta = MODALITY_META[activeModality]
   const Icon = meta.Icon
-  const newLabel =
-    activeModality === 'chat' ? t('New chat') : t('New project')
+  const newLabel = activeModality === 'chat' ? t('New chat') : t('New project')
 
   const handleRenameSubmit = (session: PlaygroundSession) => {
     const next = renameValue.trim()
@@ -110,10 +109,7 @@ export function SessionHistoryPanel(props: SessionHistoryPanelProps) {
 
   return (
     <div
-      className={cn(
-        'flex h-full min-h-0 flex-col',
-        props.className
-      )}
+      className={cn('flex h-full min-h-0 flex-col', props.className)}
       data-session-history=''
     >
       <div
@@ -151,7 +147,9 @@ export function SessionHistoryPanel(props: SessionHistoryPanelProps) {
         <div className='flex flex-col gap-0.5 p-2'>
           {items.length === 0 && (
             <div className='text-muted-foreground flex flex-col items-center gap-2 px-3 py-10 text-center text-xs'>
-              <Icon className='size-6 opacity-50' aria-hidden='true' />
+              <span className='bg-primary/10 text-primary flex size-10 items-center justify-center rounded-xl'>
+                <Icon className='size-5' aria-hidden='true' />
+              </span>
               <p>{t('No saved sessions yet')}</p>
               <p className='text-[11px] opacity-80'>
                 {t('Start chatting or generating to build history here.')}

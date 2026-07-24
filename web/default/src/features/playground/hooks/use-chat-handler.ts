@@ -38,7 +38,13 @@ import {
   isChatCompletionPayloadTooLarge,
   type BuildChatPayloadOptions,
 } from '../lib/streaming/payload-builder'
-import type { Message, PlaygroundConfig, ParameterEnabled } from '../types'
+import type { StreamMessageUpdate } from '../lib/streaming/stream-utils'
+import type {
+  Message,
+  MessageTokenUsage,
+  PlaygroundConfig,
+  ParameterEnabled,
+} from '../types'
 import { useStreamRequest } from './use-stream-request'
 
 interface UseChatHandlerOptions {
@@ -55,6 +61,7 @@ const STREAM_UPDATE_FLUSH_MS = 50
 type PendingStreamChunks = {
   content: string
   reasoning: string
+  usage?: MessageTokenUsage
 }
 
 function mergePendingStreamChunk(
@@ -95,7 +102,11 @@ export function useChatHandler({
     }
 
     const pendingChunks = pendingStreamChunksRef.current
-    if (!pendingChunks.reasoning && !pendingChunks.content) {
+    if (
+      !pendingChunks.reasoning &&
+      !pendingChunks.content &&
+      !pendingChunks.usage
+    ) {
       return
     }
 
@@ -118,6 +129,10 @@ export function useChatHandler({
             'content',
             pendingChunks.content
           )
+        }
+
+        if (pendingChunks.usage) {
+          updatedMessage = { ...updatedMessage, usage: pendingChunks.usage }
         }
 
         return updatedMessage
@@ -165,11 +180,15 @@ export function useChatHandler({
 
   // Handle stream update
   const handleStreamUpdate = useCallback(
-    (type: 'reasoning' | 'content', chunk: string) => {
-      pendingStreamChunksRef.current[type] = mergePendingStreamChunk(
-        pendingStreamChunksRef.current[type],
-        chunk
-      )
+    (update: StreamMessageUpdate) => {
+      if (update.type === 'usage') {
+        pendingStreamChunksRef.current.usage = update.usage
+      } else {
+        pendingStreamChunksRef.current[update.type] = mergePendingStreamChunk(
+          pendingStreamChunksRef.current[update.type],
+          update.chunk
+        )
+      }
       scheduleStreamFlush()
     },
     [scheduleStreamFlush]

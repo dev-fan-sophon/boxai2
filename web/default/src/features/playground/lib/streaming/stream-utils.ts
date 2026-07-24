@@ -17,17 +17,16 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ERROR_MESSAGES } from '../../constants'
-import type { ChatCompletionChunk } from '../../types'
+import type { ChatCompletionChunk, MessageTokenUsage } from '../../types'
 
 const STREAM_DONE_MESSAGE = '[DONE]'
 const STREAM_CLOSED_READY_STATE = 2
 
 export type StreamUpdateType = 'reasoning' | 'content'
 
-export type StreamMessageUpdate = {
-  type: StreamUpdateType
-  chunk: string
-}
+export type StreamMessageUpdate =
+  | { type: StreamUpdateType; chunk: string }
+  | { type: 'usage'; usage: MessageTokenUsage }
 
 type StreamErrorPayload = {
   error?: {
@@ -66,13 +65,32 @@ export function parseStreamErrorDetails(data?: string): StreamErrorDetails {
 
 export function parseStreamMessageUpdates(data: string): StreamMessageUpdate[] {
   const chunk = JSON.parse(data) as ChatCompletionChunk
+  const updates: StreamMessageUpdate[] = []
+
+  const usage = chunk.usage
+  if (
+    usage &&
+    typeof usage.prompt_tokens === 'number' &&
+    typeof usage.completion_tokens === 'number'
+  ) {
+    updates.push({
+      type: 'usage',
+      usage: {
+        promptTokens: usage.prompt_tokens,
+        completionTokens: usage.completion_tokens,
+        totalTokens:
+          typeof usage.total_tokens === 'number'
+            ? usage.total_tokens
+            : usage.prompt_tokens + usage.completion_tokens,
+      },
+    })
+  }
+
   const delta = chunk.choices?.[0]?.delta
 
   if (!delta) {
-    return []
+    return updates
   }
-
-  const updates: StreamMessageUpdate[] = []
 
   if (delta.reasoning_content) {
     updates.push({ type: 'reasoning', chunk: delta.reasoning_content })

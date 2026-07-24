@@ -122,6 +122,22 @@ describe('buildChatCompletionPayload', () => {
     expect(String(payload.messages[0]?.content).length).toBe(8000)
   })
 
+  it('requests stream usage only for streaming payloads', () => {
+    const streaming = buildChatCompletionPayload(
+      [userMessage('hello')],
+      { ...DEFAULT_CONFIG, stream: true },
+      DEFAULT_PARAMETER_ENABLED
+    )
+    expect(streaming.stream_options).toEqual({ include_usage: true })
+
+    const nonStreaming = buildChatCompletionPayload(
+      [userMessage('hello')],
+      { ...DEFAULT_CONFIG, stream: false },
+      DEFAULT_PARAMETER_ENABLED
+    )
+    expect(nonStreaming).not.toHaveProperty('stream_options')
+  })
+
   it('formats image and PDF attachments for chat completions', () => {
     const message = userMessage('Compare these files')
     message.attachments = [

@@ -16,32 +16,23 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { ReactNode } from 'react'
-import type { FootnoteNode, ParsedNode } from 'stream-markdown-parser'
+import * as katex from 'katex'
 
-export type ResponseProps = {
-  children?: ReactNode
-  className?: string
-  final?: boolean
+import 'katex/dist/katex.min.css'
+
+function normalizeMathSource(source: string): string {
+  return source
+    .trim()
+    .replace(/^\\\(/, '')
+    .replace(/\\\)$/, '')
+    .replace(/^\\\[/, '')
+    .replace(/\\\]$/, '')
 }
 
-export type AlertKind = 'note' | 'tip' | 'important' | 'warning' | 'caution'
-
-export type AlertConfig = {
-  label: string
-  className: string
-  markerClassName: string
-}
-
-export type ParsedResponseContent = {
-  bodyNodes: ParsedNode[]
-  footnotes: FootnoteNode[]
-}
-
-export type RenderChildren = (nodes: ParsedNode[]) => ReactNode
-
-export type BlockRendererOptions = {
-  renderChildren: RenderChildren
-  /** True when the message finished streaming; gates heavy fence previews. */
-  final: boolean
+export function renderMathToHtml(source: string, displayMode: boolean): string {
+  return katex.renderToString(normalizeMathSource(source), {
+    displayMode,
+    output: 'htmlAndMathml',
+    throwOnError: false,
+  })
 }

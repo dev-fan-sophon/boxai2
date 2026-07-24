@@ -207,7 +207,21 @@ export function applyChatCompletionResponse(
     return null
   }
 
-  return applyChatCompletionChoice(message, choice)
+  const updated = applyChatCompletionChoice(message, choice)
+  const usage = response.usage
+
+  if (!usage) {
+    return updated
+  }
+
+  return {
+    ...updated,
+    usage: {
+      promptTokens: usage.prompt_tokens,
+      completionTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+    },
+  }
 }
 
 /**

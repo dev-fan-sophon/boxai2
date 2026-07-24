@@ -49,6 +49,12 @@ export type MessageSource = {
 
 export type PlaygroundMessageLayoutMode = 'alternating' | 'left'
 
+export type MessageTokenUsage = {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
 export interface MessageVersion {
   id: string
   content: string
@@ -94,6 +100,7 @@ export interface Message {
   isContentComplete?: boolean
   status?: MessageStatus
   errorCode?: string | null
+  usage?: MessageTokenUsage
 }
 
 // API payload types
@@ -118,6 +125,7 @@ export interface ChatCompletionRequest {
   group?: string
   messages: ChatCompletionMessage[]
   stream: boolean
+  stream_options?: { include_usage: boolean }
   temperature?: number
   top_p?: number
   max_tokens?: number
@@ -140,6 +148,11 @@ export interface ChatCompletionChunk {
     }
     finish_reason: string | null
   }>
+  usage?: {
+    prompt_tokens: number
+    completion_tokens: number
+    total_tokens: number
+  } | null
 }
 
 export interface ChatCompletionResponse {

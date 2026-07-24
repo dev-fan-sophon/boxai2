@@ -152,7 +152,7 @@ export function ModelCatalog(props: ModelCatalogProps) {
                 className={cn(
                   'focus-visible:ring-ring flex min-h-9 flex-col items-center justify-center gap-0.5 rounded-[0.65rem] px-0.5 py-1.5 text-center outline-none transition-[color,background-color,box-shadow,transform] focus-visible:ring-2 active:scale-[0.98] sm:min-h-10',
                   active
-                    ? 'bg-background text-foreground shadow-xs ring-border/70 ring-1'
+                    ? 'bg-background text-primary shadow-xs ring-border/70 ring-1'
                     : 'text-muted-foreground hover:text-foreground',
                   disabled && 'pointer-events-none opacity-35'
                 )}
@@ -266,7 +266,7 @@ export function ModelCatalog(props: ModelCatalogProps) {
                             {model.model_name}
                           </span>
                           {isNew && (
-                            <span className='shrink-0 rounded bg-rose-500/20 px-1 py-px text-[9px] font-bold tracking-wide text-rose-300 ring-1 ring-rose-400/30'>
+                            <span className='bg-chart-4/20 text-chart-4 ring-chart-4/30 shrink-0 rounded px-1 py-px text-[9px] font-bold tracking-wide ring-1'>
                               {t('NEW')}
                             </span>
                           )}

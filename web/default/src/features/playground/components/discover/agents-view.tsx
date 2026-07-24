@@ -13,6 +13,11 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
+import {
+  CardStaggerContainer,
+  CardStaggerItem,
+  PageTransition,
+} from '@/components/page-transition'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -75,11 +80,11 @@ export function AgentsView(props: AgentsViewProps) {
   return (
     <div
       className={cn(
-        'min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-8',
+        'playground-discover-hero min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-8',
         props.className
       )}
     >
-      <div className='mx-auto max-w-4xl space-y-6'>
+      <PageTransition className='mx-auto max-w-4xl space-y-6'>
         <div>
           <h1 className='text-foreground text-2xl font-semibold'>
             {t('Agents')}
@@ -90,17 +95,15 @@ export function AgentsView(props: AgentsViewProps) {
             )}
           </p>
         </div>
-        <div className='grid gap-3 sm:grid-cols-2'>
+        <CardStaggerContainer className='grid gap-3 sm:grid-cols-2'>
           {agents.map((agent) => (
-            <AgentCardButton
-              key={agent.id}
-              agent={agent}
-              onClick={() => runAgent(agent)}
-            />
+            <CardStaggerItem key={agent.id}>
+              <AgentCardButton agent={agent} onClick={() => runAgent(agent)} />
+            </CardStaggerItem>
           ))}
-        </div>
+        </CardStaggerContainer>
         <SkillLanding />
-      </div>
+      </PageTransition>
       <AgentDialogs dialog={dialog} onClose={() => setDialog(null)} />
     </div>
   )
@@ -114,8 +117,9 @@ function AgentCardButton(props: { agent: AgentCard; onClick: () => void }) {
       type='button'
       onClick={props.onClick}
       className={cn(
-        'border-border bg-muted/40 w-full rounded-xl border p-4 text-left outline-none transition-colors',
-        'hover:border-primary/30 hover:bg-muted/60 focus-visible:ring-ring focus-visible:ring-2'
+        'border-border from-muted/50 to-muted/20 w-full rounded-xl border bg-gradient-to-br p-4 text-left outline-none transition-all',
+        'hover:border-primary/30 hover:-translate-y-0.5 hover:shadow-md focus-visible:ring-ring focus-visible:ring-2',
+        'motion-reduce:transition-none motion-reduce:hover:translate-y-0'
       )}
     >
       <div className='flex items-start gap-2.5'>
@@ -148,7 +152,7 @@ function AgentCardButton(props: { agent: AgentCard; onClick: () => void }) {
 function SkillLanding() {
   const { t } = useTranslation()
   return (
-    <section className='border-border from-primary/10 to-accent/40 rounded-2xl border bg-gradient-to-br via-transparent p-5'>
+    <section className='border-border from-primary/15 via-chart-3/10 to-chart-4/15 rounded-2xl border bg-gradient-to-br p-5'>
       <h2 className='text-foreground text-lg font-semibold'>
         {t('Zero-friction API access')}
       </h2>

@@ -28,6 +28,7 @@ import {
   isStreamDoneMessage,
   parseStreamErrorDetails,
   parseStreamMessageUpdates,
+  type StreamMessageUpdate,
 } from '../lib'
 import type { ChatCompletionRequest } from '../types'
 
@@ -52,7 +53,7 @@ export function useStreamRequest() {
   const sendStreamRequest = useCallback(
     (
       payload: ChatCompletionRequest,
-      onUpdate: (type: 'reasoning' | 'content', chunk: string) => void,
+      onUpdate: (update: StreamMessageUpdate) => void,
       onComplete: () => void,
       onError: (error: string, errorCode?: string) => void
     ) => {
@@ -87,7 +88,7 @@ export function useStreamRequest() {
           const updates = parseStreamMessageUpdates(e.data)
 
           for (const update of updates) {
-            onUpdate(update.type, update.chunk)
+            onUpdate(update)
           }
         } catch (error) {
           // eslint-disable-next-line no-console

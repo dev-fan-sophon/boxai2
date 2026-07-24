@@ -229,6 +229,12 @@ export const STATIC_I18N_KEYS = [
   'Match models containing this name',
   'Match models ending with this name',
 
+  // Response chart fences and table visualization (dynamic labels)
+  'Bar',
+  'Line',
+  'Area',
+  'Pie',
+
   // Playground parameter controls
   'Temperature',
   'Top P',

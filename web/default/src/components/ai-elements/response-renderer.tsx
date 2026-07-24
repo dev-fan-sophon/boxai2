@@ -52,22 +52,52 @@ import {
   renderTextNode,
 } from './response-renderer-inline'
 import { renderTable } from './response-renderer-table'
+import type { BlockRendererOptions } from './response-types'
 
-export function renderChildren(nodes: ParsedNode[]): ReactNode {
-  return nodes.map((node, index) => renderNode(node, getNodeKey(node, index)))
+function createRendererOptions(final: boolean): BlockRendererOptions {
+  const options: BlockRendererOptions = {
+    final,
+    renderChildren: (nodes) => renderNodes(nodes, options),
+  }
+  return options
 }
 
-export function renderFootnotes(footnotes: FootnoteNode[]): ReactNode {
-  return renderFootnotesBlock(footnotes, { renderChildren })
+function renderNodes(
+  nodes: ParsedNode[],
+  options: BlockRendererOptions
+): ReactNode {
+  return nodes.map((node, index) =>
+    renderNode(node, getNodeKey(node, index), options)
+  )
 }
 
-function renderNode(node: ParsedNode, key: string): ReactNode {
+export function renderResponseNodes(
+  nodes: ParsedNode[],
+  final: boolean
+): ReactNode {
+  return renderNodes(nodes, createRendererOptions(final))
+}
+
+export function renderResponseFootnotes(
+  footnotes: FootnoteNode[],
+  final: boolean
+): ReactNode {
+  return renderFootnotesBlock(footnotes, createRendererOptions(final))
+}
+
+function renderNode(
+  node: ParsedNode,
+  key: string,
+  options: BlockRendererOptions
+): ReactNode {
+  const { renderChildren } = options
+
   if (isTextNode(node)) {
     return renderTextNode(node)
   }
 
   if (isHeadingNode(node)) {
-    return renderHeading(node, key, { renderChildren })
+    return renderHeading(node, key, options)
   }
 
   if (node.type === 'paragraph' && hasParsedChildren(node)) {
@@ -83,11 +113,11 @@ function renderNode(node: ParsedNode, key: string): ReactNode {
   }
 
   if (isListNode(node)) {
-    return renderList(node, key, { renderChildren })
+    return renderList(node, key, options)
   }
 
   if (isCodeBlockNode(node)) {
-    return renderCodeBlock(node, key)
+    return renderCodeBlock(node, key, options)
   }
 
   if (node.type === 'inline_code' && 'code' in node) {
@@ -110,15 +140,15 @@ function renderNode(node: ParsedNode, key: string): ReactNode {
   }
 
   if (isBlockquoteNode(node)) {
-    return renderBlockquote(node, key, { renderChildren })
+    return renderBlockquote(node, key, options)
   }
 
   if (isTableNode(node)) {
-    return renderTable(node, key, { renderChildren })
+    return renderTable(node, key, options)
   }
 
   if (isDefinitionListNode(node)) {
-    return renderDefinitionList(node, key, { renderChildren })
+    return renderDefinitionList(node, key, options)
   }
 
   if (node.type === 'strong' && hasParsedChildren(node)) {
@@ -204,7 +234,7 @@ function renderNode(node: ParsedNode, key: string): ReactNode {
   }
 
   if (isHtmlBlockNode(node) && node.tag === 'details') {
-    return renderDetails(node, key, { renderChildren })
+    return renderDetails(node, key, options)
   }
 
   if (node.type === 'html_block' && 'content' in node) {

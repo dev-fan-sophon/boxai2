@@ -56,6 +56,22 @@ function formatDuration(
   return t('{{value}}s', { value: (durationMs / 1000).toFixed(2) })
 }
 
+function formatTokensPerSecond(
+  completionTokens: number,
+  durationMs: number | undefined
+): string | undefined {
+  if (
+    typeof durationMs !== 'number' ||
+    !Number.isFinite(durationMs) ||
+    durationMs <= 0 ||
+    completionTokens <= 0
+  ) {
+    return undefined
+  }
+
+  return (completionTokens / (durationMs / 1000)).toFixed(1)
+}
+
 export function MessageMetadata(props: MessageMetadataProps) {
   const { t } = useTranslation()
   const messageTime = formatMessageTime(props.message.createdAt)
@@ -75,8 +91,13 @@ export function MessageMetadata(props: MessageMetadataProps) {
     props.message.modelChangeFrom && props.message.modelChangeTo
       ? `${props.message.modelChangeFrom} → ${props.message.modelChangeTo}`
       : undefined
+  const usage =
+    props.message.from === 'assistant' ? props.message.usage : undefined
+  const tokensPerSecond = usage
+    ? formatTokensPerSecond(usage.completionTokens, props.message.durationMs)
+    : undefined
 
-  if (!messageTime && !duration && !modelLabel && !modelChange) {
+  if (!messageTime && !duration && !modelLabel && !modelChange && !usage) {
     return null
   }
 
@@ -87,7 +108,7 @@ export function MessageMetadata(props: MessageMetadataProps) {
           'text-muted-foreground mt-1 flex min-h-4 items-center justify-center gap-1.5 text-[11px] leading-none'
         )}
       >
-        <span className='bg-muted/70 text-muted-foreground inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[10px] ring-1 ring-border/60'>
+        <span className='bg-muted/70 text-muted-foreground ring-border/60 inline-flex items-center rounded-full px-2.5 py-0.5 font-mono text-[10px] ring-1'>
           {t('Switched model')}: {modelChange}
         </span>
       </div>
@@ -112,6 +133,28 @@ export function MessageMetadata(props: MessageMetadataProps) {
         <>
           {(messageTime || modelLabel) && <span aria-hidden='true'>·</span>}
           <span>{t('Response time: {{duration}}', { duration })}</span>
+        </>
+      )}
+      {usage && (
+        <>
+          {(messageTime || modelLabel || duration) && (
+            <span aria-hidden='true'>·</span>
+          )}
+          <span
+            className='font-mono text-[10px]'
+            title={t('Prompt / completion tokens')}
+          >
+            ↑{usage.promptTokens.toLocaleString()} ↓
+            {usage.completionTokens.toLocaleString()}
+          </span>
+          {tokensPerSecond && (
+            <>
+              <span aria-hidden='true'>·</span>
+              <span className='font-mono text-[10px]'>
+                {t('{{value}} tok/s', { value: tokensPerSecond })}
+              </span>
+            </>
+          )}
         </>
       )}
     </div>
