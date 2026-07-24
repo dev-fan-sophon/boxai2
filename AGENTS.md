@@ -179,7 +179,7 @@ make dev-web-local
 
 | Local file (gitignored) | Amp orb Settings | Purpose |
 |-------------------------|------------------|---------|
-| `.env.boxai-admin` | `BOXAI_*` | Management API + production SSH (`boxai-api` / `boxai-server` / deploy) |
+| `.env.boxai-admin` | `BOXAI_*` + `SUB2API_*` | Management API + production SSH + **Sub2API** (BWG subscription relay) |
 | `.env.cloudflare` | `CLOUDFLARE_*` | Full Cloudflare control of **小 QQ** account + `you-box.com` |
 | (server only) `/opt/boxai/.env` | **never** copy wholesale | App runtime DB/Redis/session/payment secrets |
 
@@ -187,7 +187,10 @@ make dev-web-local
 set -a; source .env.boxai-admin; set +a
 set -a; source .env.cloudflare; set +a
 # offline CF canonical copy: ~/.config/boxai/cf-xiaoqq-full.env
+# Sub2API (not BoxAI app): $SUB2API_BASE_URL  admin: X-API-Key $SUB2API_ADMIN_API_KEY
 ```
+
+**Sub2API** (`https://sub2api.origingame.dev`, host `/opt/sub2api` on `bwg`) is a separate AI subscription pool (simple mode). Keys and admin API live under `SUB2API_*` in `.env.boxai-admin` / Amp. Full map: [`docs/environment.md`](docs/environment.md) § Sub2API. Amp checklist: [`.agents/skills/managing-boxai-platform/reference/orb.md`](.agents/skills/managing-boxai-platform/reference/orb.md).
 
 Amp orb setup checklist: [`.agents/skills/managing-boxai-platform/reference/orb.md`](.agents/skills/managing-boxai-platform/reference/orb.md).
 

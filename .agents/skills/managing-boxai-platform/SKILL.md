@@ -12,6 +12,8 @@ Use the management API for application configuration. Use SSH only for deploymen
 
 **Full map:** [`docs/environment.md`](../../../docs/environment.md). Amp wiring: [`reference/orb.md`](reference/orb.md).
 
+**Sub2API** (optional external subscription relay, not the BoxAI process): load `SUB2API_*` from `.env.boxai-admin`. Admin calls use header `X-API-Key: $SUB2API_ADMIN_API_KEY` against `$SUB2API_BASE_URL` (production: `https://sub2api.origingame.dev`). Relay user keys: `SUB2API_KEY_CODEX` / `SUB2API_KEY_GROK`.
+
 API operations read these variables (local: `.env.boxai-admin`):
 
 ```text

@@ -15,6 +15,7 @@ Local equivalents (gitignored on developer machines):
 | Amp / orb keys | Local file |
 |----------------|------------|
 | `BOXAI_*` | `.env.boxai-admin` (from `.env.boxai-admin.example`) |
+| `SUB2API_*` | `.env.boxai-admin` (same file; Sub2API on BWG) |
 | `CLOUDFLARE_*` | `.env.cloudflare` (from `.env.cloudflare.example`; also `~/.config/boxai/cf-xiaoqq-full.env`) |
 
 ### 2a. BoxAI management API + SSH
@@ -41,7 +42,41 @@ BOXAI_SSH_HOST_KEY=<pinned known_hosts line>
 
 Do not retain `BOXAI_ADMIN_PASSWORD` in project settings. It is needed only for the one-time token bootstrap and should be removed immediately afterward.
 
-### 2b. Cloudflare full-control (小 QQ / you-box.com)
+### 2b. Sub2API (BWG subscription relay)
+
+Not the BoxAI app. Public: `https://sub2api.origingame.dev`. Ops: SSH `bwg`, dir `/opt/sub2api`.
+
+Non-secret (or low sensitivity):
+
+```text
+SUB2API_BASE_URL=https://sub2api.origingame.dev
+SUB2API_ADMIN_API_HEADER=X-API-Key
+SUB2API_ADMIN_EMAIL=<admin dashboard email>
+SUB2API_DEPLOY_DIR=/opt/sub2api
+SUB2API_SSH_HOST=bwg
+SUB2API_RUN_MODE=simple
+```
+
+Secrets (Amp → secret):
+
+```text
+SUB2API_ADMIN_API_KEY=admin-…          # X-API-Key header for /api/v1/admin/*
+SUB2API_ADMIN_PASSWORD=…               # optional; prefer admin API key
+SUB2API_KEY_CODEX=sk-…                 # openai-default group
+SUB2API_KEY_GROK=sk-…                  # grok-default group
+SUB2API_KEY_CLI=sk-…                   # anthropic group (optional)
+```
+
+Admin API example:
+
+```bash
+curl -fsS -H "X-API-Key: $SUB2API_ADMIN_API_KEY" \
+  "$SUB2API_BASE_URL/api/v1/admin/groups?page_size=5"
+```
+
+Local file: `.env.boxai-admin`. Full notes: [`docs/environment.md`](../../../../docs/environment.md) § Sub2API.
+
+### 2c. Cloudflare full-control (小 QQ / you-box.com)
 
 Agents building edge features (DNS, Workers, R2, Email, Tunnels, AI Gateway, …) must use the **小 QQ** Cloudflare account. Put these in Amp Settings (token as secret):
 
@@ -88,6 +123,10 @@ curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   https://api.cloudflare.com/client/v4/user/tokens/verify
 curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID" | head -c 200
+
+# Sub2API admin (header is X-API-Key, not Bearer)
+curl -fsS -H "X-API-Key: $SUB2API_ADMIN_API_KEY" \
+  "$SUB2API_BASE_URL/api/v1/admin/groups?page_size=1" | head -c 120
 ```
 
 Expected signals:
@@ -96,6 +135,7 @@ Expected signals:
 - Authenticated user request succeeds without exposing the token.
 - SSH host-key verification succeeds; `boxai` systemd unit is `active`; infra compose shows healthy **postgres** and **redis** only (no app container).
 - CF token verify returns `success: true` / active; account name is `123592844@qq.com's Account`.
+- Sub2API admin groups list returns `code: 0` (do not print `SUB2API_ADMIN_API_KEY`).
 ## 6. Deploy
 
 **Preferred:** push/merge to `main` and let GitHub Actions **Deploy production** run.

@@ -24,13 +24,13 @@ Related:
 | `.env.cloudflare.example` | yes | Placeholder keys for Cloudflare |
 | `~/.config/boxai/cf-xiaoqq-full.env` | outside repo | Canonical offline copy of the CF full token (mode 600) |
 | `~/.config/boxai/cf-xiaoqq` | outside repo | Optional CLI helper wrapping the CF API |
-| `~/.config/boxai/admin.env` | outside repo | Legacy/local SMTP + R2 helper secrets (not Amp orb) |
-| Amp project Settings | Amp only | Same `BOXAI_*` / `CLOUDFLARE_*` keys injected into orbs |
+| `~/.config/boxai/admin.env` | outside repo | Local helper: SMTP + R2 + **Sub2API** (mirror of `.env.boxai-admin` Sub2 keys; not Amp orb) |
+| Amp project Settings | Amp only | Same `BOXAI_*` / `CLOUDFLARE_*` / `SUB2API_*` keys injected into orbs |
 
 Load local files:
 
 ```bash
-# Platform admin + SSH
+# Platform admin + SSH + Sub2API
 set -a; source .env.boxai-admin; set +a
 
 # Cloudflare full account API (小 QQ)
@@ -75,6 +75,47 @@ Do **not** put `BOXAI_ADMIN_PASSWORD` in Amp long-term (bootstrap only).
 Do **not** copy full production `/opt/boxai/.env` into Amp.
 
 Details: [orb.md](../.agents/skills/managing-boxai-platform/reference/orb.md).
+
+### Sub2API (subscription relay on BWG)
+
+Separate product from the BoxAI app (`you-box.com`). Self-hosted on **BWG** under `/opt/sub2api`, public UI/API:
+
+| | |
+|--|--|
+| Public base | `https://sub2api.origingame.dev` |
+| Deploy dir | `/opt/sub2api` (Docker Compose: app + postgres + redis) |
+| Run mode | `simple` (hides SaaS billing UI; **also hides `/admin/groups` in the SPA**) |
+| Admin HTTP auth | Header **`X-API-Key: $SUB2API_ADMIN_API_KEY`** (Bearer JWT is for interactive login only) |
+
+Variables (in `.env.boxai-admin` / Amp secrets):
+
+```text
+SUB2API_BASE_URL=https://sub2api.origingame.dev
+SUB2API_ADMIN_API_KEY=admin-…          # secret; regenerate: POST /api/v1/admin/settings/admin-api-key/regenerate
+SUB2API_ADMIN_API_HEADER=X-API-Key
+SUB2API_ADMIN_EMAIL=…                  # dashboard login
+SUB2API_ADMIN_PASSWORD=…               # secret; prefer admin API key for agents
+SUB2API_KEY_CODEX=sk-…                 # openai-default group (Codex / GPT)
+SUB2API_KEY_GROK=sk-…                  # grok-default group
+SUB2API_KEY_CLI=sk-…                   # anthropic default group (when accounts exist)
+SUB2API_DEPLOY_DIR=/opt/sub2api
+SUB2API_SSH_HOST=bwg
+SUB2API_RUN_MODE=simple
+```
+
+Quick checks (do not print full keys):
+
+```bash
+set -a; source .env.boxai-admin; set +a
+curl -fsS -H "X-API-Key: $SUB2API_ADMIN_API_KEY" \
+  "$SUB2API_BASE_URL/api/v1/admin/groups?page_size=1" | head -c 120
+curl -fsS -H "Authorization: Bearer $SUB2API_KEY_CODEX" \
+  "$SUB2API_BASE_URL/v1/models" | head -c 120
+```
+
+**Groups:** one platform per group (`openai` / `grok` / `anthropic` / …). A key binds to **one** `group_id`. Image generation is per-group `allow_image_generation` (manage via admin API when simple mode hides the Groups UI).
+
+Offline mirror of the same Sub2API secrets: `~/.config/boxai/admin.env` (keep in sync with `.env.boxai-admin`).
 
 ---
 
@@ -244,7 +285,7 @@ Environment name: `production`.
 ## 6. Security rules
 
 1. Never commit `.env`, `.env.boxai-admin`, `.env.cloudflare`, or token values.
-2. Never print `BOXAI_ADMIN_TOKEN`, `CLOUDFLARE_API_TOKEN`, or private keys in chat/PR bodies.
+2. Never print `BOXAI_ADMIN_TOKEN`, `CLOUDFLARE_API_TOKEN`, `SUB2API_ADMIN_API_KEY`, `SUB2API_ADMIN_PASSWORD`, `SUB2API_KEY_*`, or private keys in chat/PR bodies.
 3. Prefer rotating compromised tokens via CF dashboard or management-token bootstrap scripts.
 4. New zone under 小 QQ: extend the token’s zone resources (token currently binds `you-box.com` only for zone-scoped APIs).
 5. Scoped product tokens (R2-only, Email-only) may still exist for app SMTP/S3; **full control for agents is `xiaoqq-full-control`**.
